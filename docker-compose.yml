@@ -1,17 +1,32 @@
+# =============================================================================
+# Unified Backend Platform - Docker Compose 配置
+# =============================================================================
+# 使用前请先复制 .env.example 为 .env 并修改相关配置
+# cp .env.example .env
+# =============================================================================
+
 services:
+  # =============================================================================
   # MongoDB - 核心业务数据库
+  # =============================================================================
   mongo:
     image: mongo:6
     container_name: unified-mongo
     restart: unless-stopped
     environment:
+      # ⚠️ 重点配置: 数据库 root 用户名（请在 .env 中修改）
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      # ⚠️ 重点配置: 数据库 root 密码（请在 .env 中修改为强密码）
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+      # ⚠️ 重点配置: 业务数据库名称
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-unified_backend}
     ports:
+      # ⚠️ 重点配置: MongoDB 对外端口（生产环境建议不要暴露到宿主机）
       - "${MONGO_PORT:-27017}:27017"
     volumes:
+      # 数据持久化目录
       - ./data/mongodb:/data/db
+      # 初始化脚本目录
       - ./mongodb-init:/docker-entrypoint-initdb.d:ro
     networks:
       - unified-network
@@ -21,35 +36,48 @@ services:
       timeout: 5s
       retries: 5
 
-  # Mongo Express - MongoDB 可视化管理
+  # =============================================================================
+  # Mongo Express - MongoDB Web 管理界面
+  # =============================================================================
   mongo-express:
     image: mongo-express:1.0
     container_name: unified-mongo-express
     restart: unless-stopped
     environment:
+      # MongoDB 连接字符串（会使用上面配置的用户名和密码）
       ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongo:27017/
+      # ⚠️ 重点配置: Mongo Express 登录用户名
       ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPR_USERNAME:-admin}
+      # ⚠️ 重点配置: Mongo Express 登录密码
       ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPR_PASSWORD:-admin123}
     ports:
-      - "${MONGO_EXPR_PORT:-8081}:8081"
+      # ⚠️ 重点配置: Mongo Express Web 访问端口
+      - "${MONGO_EXPR_PORT:-8081}:8081"  # 访问: http://localhost:8081
     depends_on:
       mongo:
         condition: service_healthy
     networks:
       - unified-network
 
-  # PostgreSQL - 仅供 Casdoor 使用
+  # =============================================================================
+  # PostgreSQL - 仅供 Casdoor SSO 使用
+  # =============================================================================
   postgres:
     image: postgres:14-alpine
     container_name: unified-postgres
     restart: unless-stopped
     environment:
+      # Casdoor 数据库用户名
       POSTGRES_USER: ${POSTGRES_USER:-casdoor}
+      # ⚠️ 重点配置: Casdoor 数据库密码
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-casdoor_pass}
+      # Casdoor 数据库名称
       POSTGRES_DB: ${POSTGRES_DB:-casdoor}
     ports:
+      # PostgreSQL 对外端口（通常不需要暴露）
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
+      # PostgreSQL 数据持久化目录
       - ./data/postgres:/var/lib/postgresql/data
     networks:
       - unified-network
@@ -59,25 +87,31 @@ services:
       timeout: 5s
       retries: 5
 
-  # Casdoor - SSO 认证服务
+  # =============================================================================
+  # Casdoor - SSO 单点登录认证服务
+  # =============================================================================
   casdoor:
     image: casbin/casdoor:latest
     container_name: unified-casdoor
     restart: unless-stopped
     environment:
-      # 驱动名称
+      # 数据库驱动（固定使用 postgres）
       driverName: "postgres"
       # PostgreSQL 连接字符串
       dataSourceName: "postgres://${POSTGRES_USER:-casdoor}:${POSTGRES_PASSWORD:-casdoor_pass}@postgres:5432/${POSTGRES_DB:-casdoor}?sslmode=disable"
-      # Redis 配置 - 支持密码认证
+      # Redis 连接（支持密码认证）
       redisEndpoint: "redis://:${REDIS_PASSWORD}@redis:6379"
-      # 应用配置
+      # Casdoor 应用名称
       appName: "unified-backend"
+      # ⚠️ 重点配置: Casdoor 访问地址（生产环境需修改为实际域名）
       origin: "${CASDOOR_ORIGIN:-http://localhost:8000}"
+      # ⚠️ 重点配置: JWT 签名密钥（必须在 .env 中修改为至少32字符的随机字符串）
       jwtSecret: "${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-32characters}"
+      # Session 有效期（秒）
       sessionDuration: "86400"
     ports:
-      - "${CASDOOR_PORT:-8000}:8000"
+      # ⚠️ 重点配置: Casdoor Web 访问端口
+      - "${CASDOOR_PORT:-8000}:8000"  # 访问: http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,12 +120,14 @@ services:
     networks:
       - unified-network
 
-  # Redis - 缓存和 Session
+  # =============================================================================
+  # Redis - 缓存和 Session 存储
+  # =============================================================================
   redis:
     image: redis:7-alpine
     container_name: unified-redis
     restart: unless-stopped
-    # 生产环境启用密码认证
+    # 根据 .env 中是否设置 REDIS_PASSWORD 决定是否启用密码
     command: >
       sh -c 'if [ -n "$${REDIS_PASSWORD}" ]; then
         redis-server --appendonly yes --requirepass $${REDIS_PASSWORD};
@@ -99,10 +135,13 @@ services:
         redis-server --appendonly yes;
       fi'
     environment:
+      # ⚠️ 重点配置: Redis 密码（留空则无密码，生产环境强烈建议设置）
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
+      # Redis 对外端口（通常不需要暴露）
       - "${REDIS_PORT:-6379}:6379"
     volumes:
+      # Redis 数据持久化目录
       - ./data/redis:/data
     networks:
       - unified-network
@@ -117,22 +156,31 @@ services:
       timeout: 5s
       retries: 5
 
-  # MinIO - 对象存储服务 (S3 兼容)
+  # =============================================================================
+  # MinIO - S3 兼容对象存储服务
+  # =============================================================================
   minio:
     image: minio/minio:latest
     container_name: unified-minio
     restart: unless-stopped
     environment:
+      # MinIO root 用户名
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      # ⚠️ 重点配置: MinIO root 密码（请在 .env 中修改为强密码）
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      # 启动时自动创建的存储桶（逗号分隔）
       MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS:-unified-files,unified-thumbnails}
     ports:
-      - "${MINIO_API_PORT:-9100}:9000"
-      - "${MINIO_CONSOLE_PORT:-9101}:9001"
+      # ⚠️ 重点配置: MinIO API 端口（用于文件访问）
+      - "${MINIO_API_PORT:-9100}:9000"  # 文件访问: http://localhost:9100/bucket/...
+      # ⚠️ 重点配置: MinIO 管理控制台端口
+      - "${MINIO_CONSOLE_PORT:-9101}:9001"  # 管理界面: http://localhost:9101
     volumes:
+      # MinIO 数据持久化目录
       - ./data/minio:/data
     networks:
       - unified-network
+    # MinIO 启动命令，指定控制台端口
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -140,7 +188,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # MinIO Client (mc) - 初始化存储桶
+  # =============================================================================
+  # MinIO 初始化容器 - 自动创建存储桶
+  # =============================================================================
   minio-init:
     image: minio/mc:latest
     container_name: unified-minio-init
@@ -149,6 +199,7 @@ services:
         condition: service_healthy
     networks:
       - unified-network
+    # 初始化脚本：创建存储桶并设置公共访问权限
     entrypoint: >
       /bin/sh -c "
       sleep 5;
@@ -160,7 +211,9 @@ services:
       echo '✅ MinIO buckets initialized';
       "
 
-  # Backend - FastAPI 服务
+  # =============================================================================
+  # Backend - FastAPI 后端服务
+  # =============================================================================
   backend:
     build:
       context: ./backend
@@ -168,30 +221,50 @@ services:
     container_name: unified-backend
     restart: unless-stopped
     environment:
-      # 应用配置
+      # ---------- 应用配置 ----------
       APP_NAME: "Unified Backend Platform"
       APP_VERSION: "1.0.0"
+      # 运行环境（development / production）
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      # API 前缀
       API_PREFIX: "/api/v1"
-      # MongoDB
+
+      # ---------- 数据库配置 ----------
+      # MongoDB 连接字符串（会使用容器内用户名密码）
       MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongo:27017/${MONGO_DATABASE:-unified_backend}?authSource=admin
-      # Redis - 支持密码认证
+      # Redis 连接 URL（支持密码）
       REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      # Casdoor / JWT
+
+      # ---------- 认证配置 ----------
+      # ⚠️ 重点配置: Casdoor 服务地址（需与上面 casdoor.origin 保持一致）
       CASDOOR_ORIGIN: ${CASDOOR_ORIGIN:-http://localhost:8000}
+      # ⚠️ 重点配置: JWT 密钥（需与上面 casdoor.jwtSecret 保持一致）
       JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-string-at-least-32-characters-long}
+      # JWT 加密算法（通常使用 HS256）
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      # MinIO / S3
+
+      # ---------- 对象存储配置 ----------
+      # MinIO 内部访问地址（容器间通信）
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      # MinIO 访问密钥
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      # MinIO 密钥（需与上面 MINIO_ROOT_PASSWORD 保持一致）
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      # 主文件存储桶
       MINIO_BUCKET: ${MINIO_BUCKET:-unified-files}
+      # 缩略图存储桶
       MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-unified-thumbnails}
+      # ⚠️ 重点配置: MinIO 公共访问 URL（前端通过此地址访问文件）
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9100}
-      # CORS
+
+      # ---------- 安全配置 ----------
+      # ⚠️ 重点配置: CORS 允许的前端来源（逗号分隔，生产环境需修改为实际域名）
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3002}
+
     ports:
-      - "${BACKEND_PORT:-9000}:8080"
+      # ⚠️ 重点配置: 后端 API 服务端口
+      - "${BACKEND_PORT:-9000}:8080"  # API 访问: http://localhost:9000/api/v1
+      # API 文档: http://localhost:9000/api/v1/docs
     depends_on:
       mongo:
         condition: service_healthy
@@ -200,15 +273,23 @@ services:
       minio:
         condition: service_healthy
     volumes:
+      # 开发模式：挂载后端代码目录实现热重载（生产环境可移除）
       - ./backend:/app
     networks:
       - unified-network
+    # FastAPI 启动命令（--reload 热重载，生产环境建议移除）
     command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
+# =============================================================================
+# 网络配置
+# =============================================================================
 networks:
   unified-network:
     driver: bridge
 
+# =============================================================================
+# 数据卷配置（命名卷，可选）
+# =============================================================================
 volumes:
   mongo-data:
   postgres-data:
