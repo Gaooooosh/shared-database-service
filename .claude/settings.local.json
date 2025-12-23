@@ -17,7 +17,8 @@
       "Bash(openssl:*)",
       "Bash(docker:*)",
       "Bash(chmod:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(while read f)"
     ]
   }
 }
