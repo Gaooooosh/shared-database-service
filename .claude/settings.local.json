@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(ss:*)",
+      "Bash(jq:*)",
+      "Bash(curl:*)",
+      "Bash(docker compose exec:*)",
+      "Bash(python3:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}

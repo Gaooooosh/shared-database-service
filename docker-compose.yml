@@ -1,0 +1,215 @@
+services:
+  # MongoDB - 核心业务数据库
+  mongo:
+    image: mongo:6
+    container_name: unified-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-unified_backend}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - ./data/mongodb:/data/db
+      - ./mongodb-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - unified-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@localhost:27017/admin --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Mongo Express - MongoDB 可视化管理
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: unified-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongo:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPR_USERNAME:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPR_PASSWORD:-admin123}
+    ports:
+      - "${MONGO_EXPR_PORT:-8081}:8081"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - unified-network
+
+  # PostgreSQL - 仅供 Casdoor 使用
+  postgres:
+    image: postgres:14-alpine
+    container_name: unified-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-casdoor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-casdoor_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-casdoor}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-casdoor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Casdoor - SSO 认证服务
+  casdoor:
+    image: casbin/casdoor:latest
+    container_name: unified-casdoor
+    restart: unless-stopped
+    environment:
+      # 驱动名称
+      driverName: "postgres"
+      # PostgreSQL 连接字符串
+      dataSourceName: "postgres://${POSTGRES_USER:-casdoor}:${POSTGRES_PASSWORD:-casdoor_pass}@postgres:5432/${POSTGRES_DB:-casdoor}?sslmode=disable"
+      # Redis 配置 - 支持密码认证
+      redisEndpoint: "redis://:${REDIS_PASSWORD}@redis:6379"
+      # 应用配置
+      appName: "unified-backend"
+      origin: "${CASDOOR_ORIGIN:-http://localhost:8000}"
+      jwtSecret: "${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-32characters}"
+      sessionDuration: "86400"
+    ports:
+      - "${CASDOOR_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - unified-network
+
+  # Redis - 缓存和 Session
+  redis:
+    image: redis:7-alpine
+    container_name: unified-redis
+    restart: unless-stopped
+    # 生产环境启用密码认证
+    command: >
+      sh -c 'if [ -n "$${REDIS_PASSWORD}" ]; then
+        redis-server --appendonly yes --requirepass $${REDIS_PASSWORD};
+      else
+        redis-server --appendonly yes;
+      fi'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - unified-network
+    healthcheck:
+      test: >
+        sh -c 'if [ -n "$${REDIS_PASSWORD}" ]; then
+          redis-cli -a $${REDIS_PASSWORD} ping;
+        else
+          redis-cli ping;
+        fi'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - 对象存储服务 (S3 兼容)
+  minio:
+    image: minio/minio:latest
+    container_name: unified-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS:-unified-files,unified-thumbnails}
+    ports:
+      - "${MINIO_API_PORT:-9100}:9000"
+      - "${MINIO_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - ./data/minio:/data
+    networks:
+      - unified-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO Client (mc) - 初始化存储桶
+  minio-init:
+    image: minio/mc:latest
+    container_name: unified-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - unified-network
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set minio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin123};
+      mc mb minio/unified-files --ignore-existing;
+      mc mb minio/unified-thumbnails --ignore-existing;
+      mc anonymous set download minio/unified-files;
+      mc anonymous set download minio/unified-thumbnails;
+      echo '✅ MinIO buckets initialized';
+      "
+
+  # Backend - FastAPI 服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: unified-backend
+    restart: unless-stopped
+    environment:
+      # 应用配置
+      APP_NAME: "Unified Backend Platform"
+      APP_VERSION: "1.0.0"
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      API_PREFIX: "/api/v1"
+      # MongoDB
+      MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongo:27017/${MONGO_DATABASE:-unified_backend}?authSource=admin
+      # Redis - 支持密码认证
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      # Casdoor / JWT
+      CASDOOR_ORIGIN: ${CASDOOR_ORIGIN:-http://localhost:8000}
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-string-at-least-32-characters-long}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      # MinIO / S3
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-unified-files}
+      MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-unified-thumbnails}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9100}
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3002}
+    ports:
+      - "${BACKEND_PORT:-9000}:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - unified-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+networks:
+  unified-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  postgres-data:
+  redis-data:

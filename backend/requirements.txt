@@ -1,0 +1,41 @@
+# =============================================================================
+# Unified Backend Platform - Python Dependencies
+# =============================================================================
+
+# Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Database
+motor==3.6.0
+beanie==1.27.0
+pymongo==4.9.2
+
+# Redis
+redis==5.2.0
+
+# Object Storage (MinIO/S3)
+boto3==1.35.52
+
+# Authentication & Security
+pyjwt==2.9.0
+cryptography==44.0.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Configuration
+pydantic==2.10.0
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+
+# Utils
+httpx==0.28.0
+orjson==3.10.12
+python-multipart==0.0.21
+
+# Development
+pytest==8.3.3
+pytest-asyncio==0.24.0
+black==24.10.0
+ruff==0.8.0
+mypy==1.13.0
