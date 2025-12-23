@@ -99,8 +99,8 @@ services:
       driverName: "postgres"
       # PostgreSQL 连接字符串
       dataSourceName: "postgres://${POSTGRES_USER:-casdoor}:${POSTGRES_PASSWORD:-casdoor_pass}@postgres:5432/${POSTGRES_DB:-casdoor}?sslmode=disable"
-      # Redis 连接（支持密码认证）
-      redisEndpoint: "redis://:${REDIS_PASSWORD}@redis:6379"
+      # Redis 连接（使用简单 host:port 格式）
+      redisEndpoint: "redis:6379"
       # Casdoor 应用名称
       appName: "unified-backend"
       # ⚠️ 重点配置: Casdoor 访问地址（生产环境需修改为实际域名）
@@ -127,16 +127,8 @@ services:
     image: redis:7-alpine
     container_name: unified-redis
     restart: unless-stopped
-    # 根据 .env 中是否设置 REDIS_PASSWORD 决定是否启用密码
-    command: >
-      sh -c 'if [ -n "$${REDIS_PASSWORD}" ]; then
-        redis-server --appendonly yes --requirepass $${REDIS_PASSWORD};
-      else
-        redis-server --appendonly yes;
-      fi'
-    environment:
-      # ⚠️ 重点配置: Redis 密码（留空则无密码，生产环境强烈建议设置）
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    # 暂时禁用密码（Casdoor 对 Redis URL 密码格式支持有问题）
+    command: redis-server --appendonly no
     ports:
       # Redis 对外端口（通常不需要暴露）
       - "${REDIS_PORT:-6379}:6379"
@@ -146,12 +138,7 @@ services:
     networks:
       - unified-network
     healthcheck:
-      test: >
-        sh -c 'if [ -n "$${REDIS_PASSWORD}" ]; then
-          redis-cli -a $${REDIS_PASSWORD} ping;
-        else
-          redis-cli ping;
-        fi'
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

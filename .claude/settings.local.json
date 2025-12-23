@@ -12,7 +12,12 @@
       "Bash(docker compose:*)",
       "Bash(docker exec:*)",
       "Bash(ls:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(test:*)",
+      "Bash(openssl:*)",
+      "Bash(docker:*)",
+      "Bash(chmod:*)",
+      "Bash(wc:*)"
     ]
   }
 }

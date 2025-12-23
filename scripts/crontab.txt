@@ -1,0 +1,45 @@
+# =============================================================================
+# Unified Backend Platform - Crontab 定时任务配置
+# =============================================================================
+# 使用方法:
+#   1. 编辑此文件中的路径和邮箱
+#   2. 安装 crontab: crontab scripts/crontab.txt
+#   3. 查看当前 crontab: crontab -l
+#   4. 删除 crontab: crontab -r
+# =============================================================================
+
+# 环境变量
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+BACKUP_DIR=/home/gaooooosh/shared-database-service/backups
+RETENTION_DAYS=7
+
+# 每天凌晨 2 点执行完整备份
+0 2 * * * /home/gaooooosh/shared-database-service/scripts/backup-all.sh >> /var/log/unified-backend-backup.log 2>&1
+
+# 每小时执行健康检查（如果需要持续监控，建议使用 systemd 或守护进程）
+# 0 * * * * /home/gaooooosh/shared-database-service/scripts/monitor.sh >> /var/log/unified-backend-monitor.log 2>&1
+
+# 每周一凌晨 3 点清理日志
+0 3 * * 1 find /var/log -name "unified-backend-*.log" -mtime +30 -delete
+
+# 每月 1 号凌晨 4 点发送备份统计报告
+0 4 1 * * du -sh $BACKUP_DIR/* | mail -s "[报告] 统一后端平台备份统计" your-email@example.com
+
+# =============================================================================
+# Crontab 时间格式说明:
+# =============================================================================
+# * * * * * 命令
+# │ │ │ │ │
+# │ │ │ │ └─── 星期几 (0-7, 0和7都表示周日)
+# │ │ │ └───── 月份 (1-12)
+# │ │ └─────── 日期 (1-31)
+# │ └───────── 小时 (0-23)
+# └─────────── 分钟 (0-59)
+#
+# 示例:
+#   0 2 * * *     - 每天凌晨 2 点
+#   */30 * * * *  - 每 30 分钟
+#   0 */2 * * *   - 每 2 小时
+#   0 0 * * 0     - 每周日午夜
+# =============================================================================

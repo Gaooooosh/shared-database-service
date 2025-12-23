@@ -524,7 +524,29 @@ curl "http://localhost:9000/api/v1/records?page=1&page_size=10&sort_by=created_a
 
 ## 开发指南
 
-### 本地开发环境
+### 📚 文档导航
+
+| 文档 | 说明 | 适用人群 |
+|------|------|----------|
+| [5分钟快速接入指南](docs/QUICKSTART.md) | 快速接入指南，5分钟上手 | 前端/移动端开发者 |
+| [开发者接入指南](docs/DEVELOPER_GUIDE.md) | 完整的接入文档，包含认证、数据、文件管理 | 前端/移动端开发者 |
+| [API 参考手册](docs/API_REFERENCE.md) | 完整的 API 接口文档 | 所有开发者 |
+| [部署文档](DEPLOYMENT.md) | 生产环境部署指南 | 运维/后端开发者 |
+| [项目架构文档](CLAUDE.md) | 详细的项目架构和开发说明 | 后端开发者 |
+
+### 前端/移动端开发者
+
+如果你想将你的应用接入统一后端：
+
+1. **5 分钟快速开始**: 阅读 [快速接入指南](docs/QUICKSTART.md)
+2. **完整功能集成**: 参考 [开发者接入指南](docs/DEVELOPER_GUIDE.md)
+3. **API 接口查询**: 查看 [API 参考手册](docs/API_REFERENCE.md)
+
+### 后端开发者
+
+如果你想参与后端开发：
+
+#### 本地开发环境
 
 #### 1. 安装依赖
 
