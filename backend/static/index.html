@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aiyueaijia Unified Backend Platform - 北邮爱乐开发者中心</title>
+    <meta name="description" content="模块化单体统一后端服务，支持多应用共享数据">
+    <link rel="stylesheet" href="/static/css/variables.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/responsive.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#3b82f6"/>
+                    <path d="M16 8L16 16M16 16L16 24M8 16L24 16" stroke="white" stroke-width="2"/>
+                </svg>
+                <span>Unified Backend</span>
+            </div>
+            <nav class="nav">
+                <a href="#hero">首页</a>
+                <a href="#services">服务状态</a>
+                <a href="#api">API 文档</a>
+                <a href="#quickstart">快速开始</a>
+                <a href="#docs">文档中心</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="hero" class="hero">
+        <div class="container">
+            <h1 class="hero-title">北邮爱乐统一后端平台</h1>
+            <p class="hero-subtitle">模块化单体架构 · 支持多应用共享</p>
+            <p class="hero-description">
+                为你的爱乐应用提供统一的认证、数据存储和文件管理服务，快速构建现代化的应用。
+            </p>
+            <div class="cta-buttons">
+                <a href="#quickstart" class="btn btn-primary">快速开始 →</a>
+                <a href="/api/v1/docs" class="btn btn-secondary">API 文档</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 服务状态 -->
+    <section id="services" class="section">
+        <div class="container">
+            <h2 class="section-title">服务状态监控</h2>
+            <p class="section-subtitle">实时监控各服务运行状态</p>
+            <div class="service-grid">
+                <div class="service-card" id="card-backend">
+                    <div class="service-icon">⚡</div>
+                    <h3>Backend API</h3>
+                    <p class="service-url">http://localhost:9000</p>
+                    <div class="service-status" id="status-Backend API">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">检查中...</span>
+                    </div>
+                </div>
+                <div class="service-card" id="card-casdoor">
+                    <div class="service-icon">🔐</div>
+                    <h3>Casdoor SSO</h3>
+                    <p class="service-url">http://localhost:8000</p>
+                    <div class="service-status" id="status-Casdoor SSO">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">检查中...</span>
+                    </div>
+                </div>
+                <div class="service-card" id="card-mongo">
+                    <div class="service-icon">🗄️</div>
+                    <h3>Mongo Express</h3>
+                    <p class="service-url">http://localhost:8081</p>
+                    <div class="service-status" id="status-Mongo Express">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">检查中...</span>
+                    </div>
+                </div>
+                <div class="service-card" id="card-minio">
+                    <div class="service-icon">📁</div>
+                    <h3>MinIO Console</h3>
+                    <p class="service-url">http://localhost:9101</p>
+                    <div class="service-status" id="status-MinIO Console">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">检查中...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="service-links">
+                <a href="http://localhost:8081" target="_blank" class="link-card">
+                    <span>🗄️</span>
+                    <div>
+                        <h4>Mongo Express</h4>
+                        <p>数据库管理界面</p>
+                    </div>
+                </a>
+                <a href="http://localhost:8000" target="_blank" class="link-card">
+                    <span>🔐</span>
+                    <div>
+                        <h4>Casdoor</h4>
+                        <p>SSO 管理后台</p>
+                    </div>
+                </a>
+                <a href="http://localhost:9101" target="_blank" class="link-card">
+                    <span>📁</span>
+                    <div>
+                        <h4>MinIO</h4>
+                        <p>对象存储管理</p>
+                    </div>
+                </a>
+                <a href="/api/v1/docs" target="_blank" class="link-card">
+                    <span>📚</span>
+                    <div>
+                        <h4>API 文档</h4>
+                        <p>Swagger UI</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 核心特性 -->
+    <section class="section section-gray">
+        <div class="container">
+            <h2 class="section-title">核心特性</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔑</div>
+                    <h3>统一认证</h3>
+                    <p>集成 Casdoor SSO，实现多应用单点登录，JWT Token 自动验证，基于角色的权限控制。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>灵活数据模型</h3>
+                    <p>通过 UnifiedRecord 的 payload 字段支持任意 JSON 结构，一套 API 适应所有业务场景。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>批量操作</h3>
+                    <p>支持批量创建、更新、删除记录，最多 100 条，详细的错误报告和事务控制。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📁</div>
+                    <h3>文件管理</h3>
+                    <p>MinIO S3 兼容存储，支持图片、视频、PDF 等多种文件类型，直接上传和预签名两种模式。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3>完整 CRUD</h3>
+                    <p>RESTful API 设计，分页、排序、搜索功能齐全，软删除、版本控制、查看计数等企业级特性。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🐳</div>
+                    <h3>容器化部署</h3>
+                    <p>Docker Compose 一键部署，包含 MongoDB、Redis、PostgreSQL、MinIO 完整技术栈。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- API 文档 -->
+    <section id="api" class="section">
+        <div class="container">
+            <h2 class="section-title">API 文档</h2>
+            <p class="section-subtitle">完整的 RESTful API，自动生成的交互式文档</p>
+            <div class="api-showcase">
+                <div class="api-info">
+                    <h3>API 端点</h3>
+                    <code class="code-block">http://localhost:9000/api/v1</code>
+                    <h3>认证方式</h3>
+                    <p>Bearer Token (从 Casdoor 获取)</p>
+                    <h3>核心功能</h3>
+                    <ul class="feature-list">
+                        <li>用户认证与授权</li>
+                        <li>记录 CRUD 操作</li>
+                        <li>批量操作 API</li>
+                        <li>文件上传下载</li>
+                    </ul>
+                </div>
+                <div class="api-demo">
+                    <div class="code-example">
+                        <h4>创建记录示例</h4>
+                        <pre><code class="language-javascript">fetch('/api/v1/records', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    app_identifier: 'blog-app',
+    collection_type: 'post',
+    payload: { title: 'Hello World' },
+    is_published: true
+  })
+}).then(res => res.json());</code></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center">
+                <a href="/api/v1/docs" target="_blank" class="btn btn-primary btn-large">
+                    查看完整 API 文档 →
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 快速开始 -->
+    <section id="quickstart" class="section section-gray">
+        <div class="container">
+            <h2 class="section-title">快速开始</h2>
+            <p class="section-subtitle">5 步完成应用接入</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>创建 Casdoor 应用</h3>
+                    <p>访问 Casdoor 管理后台，创建新应用，获取 Client ID 和 Secret。</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>集成用户登录</h3>
+                    <p>使用 OAuth 2.0 协议集成 Casdoor，获取 JWT Token 进行后续 API 调用。</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>创建数据记录</h3>
+                    <p>通过 API 创建 UnifiedRecord，在 payload 字段存储任意业务数据。</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>上传文件</h3>
+                    <p>使用文件上传 API，将图片、视频等文件存储到 MinIO 对象存储。</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <h3>部署应用</h3>
+                    <p>完成开发和测试后，部署应用并配置 CORS 和域名。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 文档中心 -->
+    <section id="docs" class="section">
+        <div class="container">
+            <h2 class="section-title">文档中心</h2>
+            <p class="section-subtitle">完整的开发指南和 API 参考</p>
+            <div class="docs-grid">
+                <a href="/docs/QUICKSTART.md" class="doc-card">
+                    <div class="doc-icon">⚡</div>
+                    <h3>5分钟快速接入</h3>
+                    <p>快速上手指南，复制粘贴代码即可完成接入</p>
+                </a>
+                <a href="/docs/DEVELOPER_GUIDE.md" class="doc-card">
+                    <div class="doc-icon">📖</div>
+                    <h3>开发者接入指南</h3>
+                    <p>完整的认证、数据、文件管理文档</p>
+                </a>
+                <a href="/docs/API_REFERENCE.md" class="doc-card">
+                    <div class="doc-icon">📋</div>
+                    <h3>API 参考手册</h3>
+                    <p>所有 API 接口的详细说明和示例</p>
+                </a>
+                <a href="/docs/DEPLOYMENT.md" class="doc-card">
+                    <div class="doc-icon">🚀</div>
+                    <h3>部署指南</h3>
+                    <p>生产环境部署、监控和备份配置</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section section-gray">
+        <div class="container">
+            <h2 class="section-title">常见问题</h2>
+            <div class="faq">
+                <details class="faq-item">
+                    <summary>如何获取 Client ID 和 Client Secret？</summary>
+                    <p>访问 Casdoor 管理后台 (http://localhost:8000)，创建应用后可在应用详情页面查看 Client ID 和 Client Secret。</p>
+                </details>
+                <details class="faq-item">
+                    <summary>payload 字段可以存储什么类型的数据？</summary>
+                    <p>payload 字段可以存储任何有效的 JSON 数据，包括对象、数组、字符串、数字等。理论上没有大小限制，但建议控制在合理范围内。</p>
+                </details>
+                <details class="faq-item">
+                    <summary>如何实现用户数据隔离？</summary>
+                    <p>使用 app_identifier 和 collection_type 组合实现数据隔离。查询时使用 owner_id: 'current' 可以自动过滤当前用户的数据。</p>
+                </details>
+                <details class="faq-item">
+                    <summary>文件上传的大小限制是多少？</summary>
+                    <p>图片最大 50MB，视频和文档最大 500MB。如需上传更大文件，可以使用预签名 URL 直接上传到 MinIO。</p>
+                </details>
+                <details class="faq-item">
+                    <summary>如何配置跨域访问？</summary>
+                    <p>在 .env 文件中配置 CORS_ORIGINS 环境变量，使用逗号分隔允许的前端域名。重启 backend 服务后生效。</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>服务状态</h4>
+                    <p>Backend API: <span id="footer-status">检查中...</span></p>
+                    <p>最后更新: <span id="last-update"></span></p>
+                </div>
+                <div class="footer-section">
+                    <h4>快速链接</h4>
+                    <ul>
+                        <li><a href="/api/v1/docs">API 文档</a></li>
+                        <li><a href="http://localhost:8000">Casdoor</a></li>
+                        <li><a href="http://localhost:8081">Mongo Express</a></li>
+                        <li><a href="http://localhost:9101">MinIO Console</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>技术支持</h4>
+                    <ul>
+                        <li><a href="/docs/README.md">文档中心</a></li>
+                        <li><a href="/docs/TROUBLESHOOTING.md">问题排查</a></li>
+                        <li><a href="https://github.com">GitHub</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Unified Backend Platform. 基于模块化单体架构设计。</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="/static/js/api-client.js"></script>
+    <script src="/static/js/monitoring.js"></script>
+    <script src="/static/js/examples.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

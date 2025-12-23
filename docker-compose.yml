@@ -262,6 +262,8 @@ services:
     volumes:
       # 开发模式：挂载后端代码目录实现热重载（生产环境可移除）
       - ./backend:/app
+      # 挂载文档目录，供后端服务提供访问
+      - ./docs:/docs:ro
     networks:
       - unified-network
     # FastAPI 启动命令（--reload 热重载，生产环境建议移除）

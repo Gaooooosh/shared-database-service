@@ -1,0 +1,138 @@
+/* =============================================================================
+   Base Styles - 统一后端平台
+   ============================================================================= */
+
+/* Reset */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* 基础样式 */
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-main);
+    font-size: var(--text-base);
+    line-height: 1.6;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 标题 */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+h1 {
+    font-size: var(--text-4xl);
+    font-weight: 700;
+}
+
+h2 {
+    font-size: var(--text-3xl);
+}
+
+h3 {
+    font-size: var(--text-2xl);
+}
+
+h4 {
+    font-size: var(--text-xl);
+}
+
+h5 {
+    font-size: var(--text-lg);
+}
+
+h6 {
+    font-size: var(--text-base);
+}
+
+/* 段落 */
+p {
+    margin-bottom: var(--spacing-md);
+}
+
+/* 链接 */
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color var(--transition-base);
+}
+
+a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+/* 代码 */
+code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background-color: var(--bg-tertiary);
+    padding: 0.2em 0.4em;
+    border-radius: var(--radius-sm);
+}
+
+pre {
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    overflow-x: auto;
+}
+
+pre code {
+    background-color: transparent;
+    padding: 0;
+    font-size: var(--text-sm);
+}
+
+/* 列表 */
+ul, ol {
+    margin-left: var(--spacing-lg);
+}
+
+li {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* 图片 */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* 容器 */
+.container {
+    width: 100%;
+    max-width: var(--container-xl);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--spacing-md);
+    padding-right: var(--spacing-md);
+}
+
+/* 文本工具类 */
+.text-center {
+    text-align: center;
+}
+
+.text-muted {
+    color: var(--text-secondary);
+}
+
+.text-small {
+    font-size: var(--text-sm);
+}

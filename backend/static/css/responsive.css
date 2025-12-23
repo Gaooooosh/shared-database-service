@@ -1,0 +1,85 @@
+/* =============================================================================
+   Responsive Styles - 统一后端平台
+   ============================================================================= */
+
+/* Tablet */
+@media (max-width: 1024px) {
+    .api-showcase {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-title {
+        font-size: var(--text-4xl);
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .container {
+        padding-left: var(--spacing-sm);
+        padding-right: var(--spacing-sm);
+    }
+
+    /* Header */
+    .header .container {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+
+    .nav {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--spacing-md);
+    }
+
+    /* Hero */
+    .hero {
+        padding: var(--spacing-2xl) var(--spacing-md);
+    }
+
+    .hero-title {
+        font-size: var(--text-3xl);
+    }
+
+    .hero-subtitle {
+        font-size: var(--text-lg);
+    }
+
+    .cta-buttons {
+        flex-direction: column;
+    }
+
+    /* Service Grid */
+    .service-grid,
+    .service-links {
+        grid-template-columns: 1fr;
+    }
+
+    /* Features Grid */
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Steps */
+    .steps {
+        grid-template-columns: 1fr;
+    }
+
+    /* Docs Grid */
+    .docs-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Footer */
+    .footer-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+}
+
+/* Large Desktop */
+@media (min-width: 1536px) {
+    .container {
+        max-width: var(--container-2xl);
+    }
+}

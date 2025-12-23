@@ -4,10 +4,13 @@ Unified Backend Platform - Main Entry Point
 FastAPI 应用入口
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.endpoints import auth, files, records
 from app.core.config import get_settings
@@ -68,6 +71,109 @@ async def health_check():
     }
 
 
+@app.get("/api/health/services", tags=["System"])
+async def services_health_check():
+    """所有服务健康检查代理"""
+    import httpx
+
+    services_status = []
+
+    # Backend API
+    services_status.append({
+        "id": "backend",
+        "name": "Backend API",
+        "status": "healthy",
+        "statusCode": 200,
+        "responseTime": 0,
+        "message": "运行中",
+        "statusId": "status-Backend API",
+        "cardId": "card-backend"
+    })
+
+    # Casdoor SSO
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("http://casdoor:8000")
+            response_time = 0  # 简化
+            services_status.append({
+                "id": "casdoor",
+                "name": "Casdoor SSO",
+                "status": "healthy" if response.status_code in [200, 401] else "error",
+                "statusCode": response.status_code,
+                "responseTime": response_time,
+                "message": "运行中" if response.status_code in [200, 401] else "不可用",
+                "statusId": "status-Casdoor SSO",
+                "cardId": "card-casdoor"
+            })
+    except Exception as e:
+        services_status.append({
+            "id": "casdoor",
+            "name": "Casdoor SSO",
+            "status": "error",
+            "statusCode": None,
+            "responseTime": None,
+            "message": "连接失败",
+            "statusId": "status-Casdoor SSO",
+            "cardId": "card-casdoor"
+        })
+
+    # Mongo Express
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("http://mongo-express:8081")
+            response_time = 0  # 简化
+            services_status.append({
+                "id": "mongo",
+                "name": "Mongo Express",
+                "status": "healthy" if response.status_code in [200, 401] else "error",
+                "statusCode": response.status_code,
+                "responseTime": response_time,
+                "message": "运行中" if response.status_code in [200, 401] else "不可用",
+                "statusId": "status-Mongo Express",
+                "cardId": "card-mongo"
+            })
+    except Exception as e:
+        services_status.append({
+            "id": "mongo",
+            "name": "Mongo Express",
+            "status": "error",
+            "statusCode": None,
+            "responseTime": None,
+            "message": "连接失败",
+            "statusId": "status-Mongo Express",
+            "cardId": "card-mongo"
+        })
+
+    # MinIO Console
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("http://minio:9001")  # MinIO Console 内部端口
+            response_time = 0  # 简化
+            services_status.append({
+                "id": "minio",
+                "name": "MinIO Console",
+                "status": "healthy" if response.status_code in [200, 403, 401] else "error",
+                "statusCode": response.status_code,
+                "responseTime": response_time,
+                "message": "运行中" if response.status_code in [200, 403, 401] else "不可用",
+                "statusId": "status-MinIO Console",
+                "cardId": "card-minio"
+            })
+    except Exception as e:
+        services_status.append({
+            "id": "minio",
+            "name": "MinIO Console",
+            "status": "error",
+            "statusCode": None,
+            "responseTime": None,
+            "message": "连接失败",
+            "statusId": "status-MinIO Console",
+            "cardId": "card-minio"
+        })
+
+    return {"services": services_status}
+
+
 # ============================================================================
 # API 路由
 # ============================================================================
@@ -91,13 +197,48 @@ app.include_router(
 
 
 # ============================================================================
-# 根路径
+# 静态文件和文档路由配置
 # ============================================================================
-@app.get("/", tags=["System"])
+# 使用绝对路径，避免工作目录变化导致的问题
+BASE_DIR = Path(__file__).resolve().parent.parent  # backend/app
+static_dir = Path("/app/static").resolve()  # 使用绝对路径
+docs_dir = Path("/docs")  # Docker 挂载点
+
+
+# ============================================================================
+# 文档服务路由 - 必须在静态文件挂载之前定义
+# ============================================================================
+@app.get("/docs/{file_path:path}", response_class=FileResponse)
+async def serve_docs(file_path: str):
+    """提供文档文件访问"""
+    if not docs_dir.exists():
+        return {"error": "Documentation directory not found", "path": file_path}
+
+    doc_file = docs_dir / file_path
+    if doc_file.exists() and doc_file.is_file():
+        return FileResponse(str(doc_file))
+    # 返回 404
+    return FileResponse(str(static_dir / "index.html"), status_code=404)
+
+
+# ============================================================================
+# 主页路由
+# ============================================================================
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """根路径"""
-    return {
-        "message": "Welcome to Unified Backend Platform",
-        "docs": f"{settings.api_prefix}/docs",
-        "health": "/health",
-    }
+    """主页 - 开发者中心"""
+    if static_dir.exists():
+        index_file = static_dir / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+    return {"message": "Welcome to Unified Backend Platform", "docs": "/docs/README.md"}
+
+
+# ============================================================================
+# 静态文件挂载 - 必须放在最后
+# ============================================================================
+if static_dir.exists():
+    print(f"📂 挂载静态文件目录: {static_dir.resolve()}")
+    app.mount("/static", StaticFiles(directory=str(static_dir.resolve())), name="static")
+else:
+    print(f"⚠️  静态文件目录不存在: {static_dir}")
