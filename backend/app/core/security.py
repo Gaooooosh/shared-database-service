@@ -90,19 +90,41 @@ async def get_or_create_user_from_jwt(payload: JWTPayload) -> User:
         # 更新最后登录时间
         user.update_last_login()
         await user.save()
-        return user
+    else:
+        # 用户不存在，创建新用户
+        user = User(
+            casdoor_id=payload.sub,
+            email=payload.email or f"{payload.sub}@casdoor",
+            display_name=payload.name,
+            avatar=payload.avatar,
+            is_superuser=False,
+            last_login_at=datetime.utcnow(),
+        )
+        await user.insert()
 
-    # 用户不存在，创建新用户
-    new_user = User(
-        casdoor_id=payload.sub,
-        email=payload.email or f"{payload.sub}@casdoor",
-        display_name=payload.name,
-        avatar=payload.avatar,
-        role="user",  # 默认角色，后续可通过管理后台调整
-        last_login_at=datetime.utcnow(),
-    )
-    await new_user.insert()
-    return new_user
+    # ===== 同步 Casdoor 权限组 =====
+    try:
+        from app.services.casdoor_sync_service import CasdoorSyncService
+        from app.services.permission_service import PermissionService
+
+        sync_service = CasdoorSyncService()
+        perm_service = PermissionService()
+
+        # 同步 Casdoor 权限组到本地角色
+        await sync_service.sync_groups_to_local_roles(
+            user_id=user.id,
+            casdoor_user_id=payload.sub,
+            app_identifier=None,  # 全局权限
+        )
+
+        # 清除用户权限缓存，确保使用最新权限
+        await perm_service.invalidate_user_cache(user.id)
+
+    except Exception as e:
+        # 权限同步失败不应阻止用户登录
+        print(f"Error syncing Casdoor permissions: {e}")
+
+    return user
 
 
 # =============================================================================

@@ -25,6 +25,7 @@ from app.api.v1.schemas.record import (
     UnifiedRecordResponse,
     UnifiedRecordUpdate,
 )
+from app.core.permissions import require_permission
 from app.core.security import get_current_user, get_current_user_optional
 from app.models.unified_record import UnifiedRecord
 from app.models.user import User
@@ -293,7 +294,7 @@ async def batch_update_records(
                 continue
 
             # 权限检查
-            if record.owner_id != current_user.id and current_user.role != "admin":
+            if record.owner_id != current_user.id and not current_user.is_superuser:
                 result.success = False
                 result.error = "Access denied: not the owner"
                 failed += 1
@@ -380,7 +381,7 @@ async def batch_delete_records(
                 continue
 
             # 权限检查
-            if record.owner_id != current_user.id and current_user.role != "admin":
+            if record.owner_id != current_user.id and not current_user.is_superuser:
                 result.success = False
                 result.error = "Access denied: not the owner"
                 failed += 1
@@ -438,7 +439,7 @@ async def get_record(
     # 权限检查：未发布内容需要所有者或管理员
     if not record.is_published:
         if not current_user or (
-            record.owner_id != current_user.id and current_user.role != "admin"
+            record.owner_id != current_user.id and not current_user.is_superuser
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -471,7 +472,7 @@ async def update_record(
     record = await get_record_or_404(record_id)
 
     # 权限检查
-    if record.owner_id != current_user.id and current_user.role != "admin":
+    if record.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: not the owner",
@@ -516,7 +517,7 @@ async def patch_record(
     record = await get_record_or_404(record_id)
 
     # 权限检查
-    if record.owner_id != current_user.id and current_user.role != "admin":
+    if record.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: not the owner",
@@ -549,7 +550,7 @@ async def delete_record(
     record = await get_record_or_404(record_id)
 
     # 权限检查
-    if record.owner_id != current_user.id and current_user.role != "admin":
+    if record.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: not the owner",

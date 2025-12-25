@@ -4,7 +4,7 @@
 
 ---
 
-## 🚀 第一步：创建 Casdoor 应用
+## 🚀 第一步：登录 Casdoor
 
 ### 1. 访问 Casdoor 管理后台
 
@@ -12,7 +12,16 @@
 http://localhost:8000
 ```
 
-### 2. 创建新应用
+### 2. 登录（使用默认管理员账户）
+
+```
+用户名: built-in/admin
+密码: admin
+```
+
+**提示**: Casdoor 用户以 `<组织名>/<用户名>` 格式标识，默认管理员为 `built-in/admin`。
+
+### 3. 创建新应用
 
 1. 点击左侧 `Applications` → `Add Application`
 2. 填写应用信息：
@@ -20,9 +29,15 @@ http://localhost:8000
 ```
 名称: my-app
 显示名称: 我的应用
+组织: built-in (默认组织)
+认证方式: OAuth 2.0 + JWT
+回调 URL: http://localhost:3000/callback
 ```
 
-3. 记录 `Client ID` 和 `Client Secret`
+3. 记录以下信息：
+   - `Client ID` - 客户端标识符
+   - `Client Secret` - 客户端密钥
+   - `Certificate` - JWT 证书（可选）
 
 ---
 
@@ -45,7 +60,12 @@ export function login() {
 // 处理回调
 export async function handleCallback(code) {
   const res = await axios.get(`${CASDOOR_URL}/api/login/oauth/access_token`, {
-    params: { client_id: 'YOUR_CLIENT_ID', code, grant_type: 'authorization_code' }
+    params: {
+      client_id: 'YOUR_CLIENT_ID',
+      client_secret: 'YOUR_CLIENT_SECRET',  // 从 Casdoor 应用详情获取
+      code,
+      grant_type: 'authorization_code'
+    }
   });
   localStorage.setItem('token', res.data.access_token);
 }
@@ -241,6 +261,18 @@ export function TodoApp() {
 **Q: 如何获取 Client ID？**
 A: 在 Casdoor 后台创建应用后，在应用详情页面可以看到。
 
+**Q: Casdoor 用户名格式是什么？**
+A: Casdoor 用户以 `<组织名>/<用户名>` 格式标识，如 `built-in/admin`。
+
+**Q: 忘记 Casdoor 管理员密码怎么办？**
+A:
+```bash
+# 方法1: 在 Casdoor 管理界面修改（如果已登录）
+# 方法2: 通过数据库重置
+docker compose exec postgres psql -U casdoor -d casdoor \
+  -c "UPDATE \"user\" SET password='<新bcrypt哈希>' WHERE owner='built-in' AND name='admin';"
+```
+
 **Q: app_identifier 可以随便写吗？**
 A: 可以，建议使用英文、数字和连字符，如 `blog-app`、`shop-app`。
 
@@ -255,8 +287,15 @@ A: 查询时使用 `owner_id: 'current'`，会自动过滤当前用户的数据�
 ## 📚 下一步
 
 - 阅读完整文档：[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)
+- 查看 Casdoor 指南：[CASDOOR_GUIDE.md](./CASDOOR_GUIDE.md)
 - 查看 API 文档：http://localhost:9000/api/v1/docs
+- 访问 Casdoor 官方文档：https://casdoor.github.io/docs/
 
 ---
 
 **需要帮助？** 查看完整文档或联系技术支持。
+
+---
+
+**更新时间**: 2024-12-24
+**文档版本**: v1.1.0

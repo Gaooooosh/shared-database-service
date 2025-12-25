@@ -106,15 +106,18 @@ class UnifiedRecord(Document):
 
 ### 认证架构
 
-项目使用 **Casdoor SSO** + **JWT** 实现统一认证：
+项目使用 **Casdoor SSO** + **JWT** 实现统一认证，并集成完整的 **RBAC 权限系统**：
 
 1. 用户在 Casdoor 登录，获取 JWT Token
 2. 后端验证 JWT 并同步/创建本地 `User` 记录
-3. 后续请求通过 `Authorization: Bearer <token>` 认证
+3. 后端自动同步 Casdoor 权限组到本地角色
+4. 后续请求通过 `Authorization: Bearer <token>` 认证
+5. 权限检查基于用户角色和权限列表
 
 ```python
 # 路由中使用认证依赖
-from app.core.security import get_current_user, require_admin
+from app.core.security import get_current_user
+from app.core.permissions import require_permission
 
 @router.post("/api/v1/records")
 async def create_record(
@@ -122,12 +125,29 @@ async def create_record(
     current_user: User = Depends(get_current_user),  # 必须认证
 ): ...
 
-@router.delete("/api/v1/admin/records/{id}")
-async def admin_delete_record(
+# 权限检查
+@router.delete("/api/v1/records/{id}")
+async def delete_record(
     id: UUID,
-    current_user: User = Depends(require_admin),  # 需要 admin 角色
+    current_user: User = Depends(require_permission("posts:delete")),  # 需要 posts:delete 权限
+): ...
+
+# 超级管理员检查
+from app.core.security import require_superuser
+
+@router.delete("/api/v1/admin/users/{id}")
+async def admin_delete_user(
+    id: UUID,
+    current_user: User = Depends(require_superuser),  # 需要超级管理员
 ): ...
 ```
+
+**权限系统特性**：
+- **RBAC 架构**: 用户 → 角色 → 权限三层结构
+- **Casdoor 同步**: 自动同步 Casdoor 权限组到本地角色
+- **通配符支持**: `posts:*` 匹配所有文章操作，`*:*` 匹配所有操作
+- **Redis 缓存**: 用户权限缓存 1 小时，提升性能
+- **应用级隔离**: 通过 `app_identifier` 实现多应用权限隔离
 
 ### 项目目录结构
 
@@ -137,29 +157,36 @@ shared-database-service/
 │   ├── app/
 │   │   ├── api/v1/
 │   │   │   ├── endpoints/      # API 路由
-│   │   │   │   ├── auth.py     # 认证端点
-│   │   │   │   ├── records.py  # 记录 CRUD (含批量操作)
-│   │   │   │   └── files.py    # 文件管理 API
+│   │   │   │   ├── auth.py         # 认证端点
+│   │   │   │   ├── records.py      # 记录 CRUD (含批量操作)
+│   │   │   │   ├── files.py        # 文件管理 API
+│   │   │   │   └── permissions.py  # 权限管理 API ✨
 │   │   │   └── schemas/        # Pydantic 请求/响应模型
-│   │   │       ├── record.py   # 记录相关 Schema
-│   │   │       └── file.py     # 文件相关 Schema
+│   │   │       ├── record.py       # 记录相关 Schema
+│   │   │       ├── file.py         # 文件相关 Schema
+│   │   │       └── permission.py   # 权限相关 Schema ✨
 │   │   ├── core/
-│   │   │   ├── config.py       # 配置管理 (Pydantic Settings)
-│   │   │   └── security.py     # JWT 验证、用户同步
+│   │   │   ├── config.py           # 配置管理 (Pydantic Settings)
+│   │   │   ├── security.py         # JWT 验证、用户同步
+│   │   │   └── permissions.py      # 权限检查装饰器 ✨
 │   │   ├── db/
-│   │   │   └── mongodb.py      # MongoDB 连接管理
+│   │   │   └── mongodb.py          # MongoDB 连接管理
 │   │   ├── models/
-│   │   │   ├── user.py         # 用户模型
-│   │   │   ├── unified_record.py  # 统一记录模型
-│   │   │   └── file.py         # 文件元数据模型
+│   │   │   ├── user.py             # 用户模型
+│   │   │   ├── unified_record.py   # 统一记录模型
+│   │   │   ├── file.py             # 文件元数据模型
+│   │   │   └── permission.py       # 权限模型 (Permission, Role, UserRoleAssignment) ✨
 │   │   ├── services/
-│   │   │   └── minio_service.py  # MinIO/S3 对象存储服务
-│   │   └── main.py             # FastAPI 应用入口
+│   │   │   ├── minio_service.py        # MinIO/S3 对象存储服务
+│   │   │   ├── permission_service.py   # 权限服务 ✨
+│   │   │   └── casdoor_sync_service.py # Casdoor 权限组同步 ✨
+│   │   └── main.py                 # FastAPI 应用入口
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── scripts/
 │   ├── backup-mongodb.sh
-│   └── restore-mongodb.sh
+│   ├── restore-mongodb.sh
+│   └── migrate_to_rbac.py       # 权限系统迁移脚本 ✨
 ├── docker-compose.yml
 ├── .env.example
 └── README.md

@@ -11,7 +11,8 @@
 - [二、数据库 CRUD 操作](#二数据库-crud-操作)
 - [三、文件管理](#三文件管理)
 - [四、完整示例](#四完整示例)
-- [五、常见问题](#五常见问题)
+- [五、权限管理](#五权限管理) ✨ 新功能
+- [六、常见问题](#六常见问题)
 
 ---
 
@@ -81,8 +82,14 @@ const APP_IDENTIFIER = 'task-app';        // 任务管理应用
 
 ```
 访问地址: http://localhost:8000
-默认用户: 首次访问需要创建管理员账户
+默认用户名: built-in/admin
+默认密码: admin
 ```
+
+**关于 Casdoor 用户标识**：
+- Casdoor 用户以 `<organization>/<username>` 格式标识
+- 默认管理员为 `built-in/admin`
+- 首次登录后请立即修改默认密码
 
 **步骤 2**: 创建新应用
 
@@ -93,19 +100,23 @@ const APP_IDENTIFIER = 'task-app';        // 任务管理应用
 ```
 名称: blog-app (你的应用名)
 显示名称: 我的博客应用
-组织: built-in (默认)
-认证方式: OAuth + JWT
+组织: built-in (默认组织)
+认证方式: OAuth 2.0 + JWT
 回调 URL: http://localhost:3000/callback (你的前端地址)
 ```
 
 4. 保存后，记录以下信息：
-   - `Client ID`
-   - `Client Secret`
-   - `Redirect URL`
+   - `Client ID` - 应用客户端 ID
+   - `Client Secret` - 应用密钥
+   - `Redirect URL` - 已配置的回调地址
+   - `Certificate` - JWT 证书（用于验证 Token）
 
-**步骤 3**: 配置 JWT 密钥
+**步骤 3**: 配置 JWT 验证
 
-Casdoor 会使用与后端相同的 `JWT_SECRET` 签发 Token，确保后端可以验证。
+Casdoor 使用 `JWT_SECRET` 签发 Token，后端使用相同密钥验证：
+- 前端从 Casdoor 获取的 JWT Token
+- 携带 Token 调用后端 API
+- 后端验证 Token 签名并提取用户信息（`casdoor_id`）
 
 ### 1.3 前端集成示例
 
@@ -935,7 +946,192 @@ export function CreatePost() {
 
 ---
 
-## 五、常见问题
+## 五、权限管理
+
+### 5.1 权限系统概述
+
+统一后端平台提供了完整的 **RBAC (基于角色的访问控制)** 权限系统：
+
+```
+用户 (User)
+  ↓ 拥有
+角色 (Role)
+  ↓ 包含
+权限 (Permission)
+  ↓ 格式
+资源:操作 (resource:action)
+```
+
+**权限命名格式**: `resource:action`
+
+- `posts:create` - 创建文章
+- `posts:read` - 读取文章
+- `posts:update` - 更新文章
+- `posts:delete` - 删除文章
+- `posts:*` - 所有文章操作（通配符）
+
+### 5.2 获取当前用户权限
+
+**API 端点**: `GET /api/v1/permissions/me`
+
+**响应**:
+```json
+{
+  "is_superuser": false,
+  "permissions": [
+    "posts:create",
+    "posts:read",
+    "posts:update",
+    "comments:create"
+  ],
+  "roles": [
+    {
+      "id": "uuid-1",
+      "name": "editor",
+      "display_name": "编辑员"
+    }
+  ]
+}
+```
+
+### 5.3 前端权限检查
+
+#### React 示例
+
+```typescript
+// src/services/permissions.ts
+import apiClient from './auth';
+
+export async function getUserPermissions() {
+  const response = await apiClient.get('/permissions/me');
+  return response.data;
+}
+
+export function hasPermission(permissions: string[], required: string): boolean {
+  // 直接匹配
+  if (permissions.includes(required)) {
+    return true;
+  }
+
+  // 通配符匹配
+  const [resource] = required.split(':');
+  return permissions.includes(`${resource}:*`) || permissions.includes('*:*');
+}
+
+// 使用示例
+export function PermissionGuard({ permission, children }) {
+  const [permissions, setPermissions] = useState([]);
+
+  useEffect(() => {
+    getUserPermissions().then(data => setPermissions(data.permissions));
+  }, []);
+
+  if (!hasPermission(permissions, permission)) {
+    return <div>无权限访问</div>;
+  }
+
+  return children;
+}
+
+// 组件中使用
+function CreatePostButton() {
+  return (
+    <PermissionGuard permission="posts:create">
+      <button>创建文章</button>
+    </PermissionGuard>
+  );
+}
+```
+
+### 5.4 菜单权限控制
+
+```typescript
+// src/components/Navigation.tsx
+import { hasPermission } from '../services/permissions';
+
+const menuItems = [
+  {
+    path: '/posts',
+    title: '文章管理',
+    permission: 'posts:read'
+  },
+  {
+    path: '/posts/create',
+    title: '创建文章',
+    permission: 'posts:create'
+  },
+  {
+    path: '/users',
+    title: '用户管理',
+    permission: 'users:read'
+  },
+  {
+    path: '/admin',
+    title: '系统管理',
+    permission: 'admin:access'
+  }
+];
+
+function Navigation({ userPermissions }) {
+  return (
+    <nav>
+      {menuItems
+        .filter(item => hasPermission(userPermissions, item.permission))
+        .map(item => (
+          <Link key={item.path} to={item.path}>
+            {item.title}
+          </Link>
+        ))
+      }
+    </nav>
+  );
+}
+```
+
+### 5.5 权限错误处理
+
+```typescript
+// src/utils/apiError.ts
+export function handlePermissionError(error: any) {
+  if (error.response?.status === 403) {
+    const message = error.response.data?.detail || '无权限执行此操作';
+    // 显示提示
+    alert(message);
+    // 或跳转到无权限页面
+    // window.location.href = '/403';
+  }
+  throw error;
+}
+
+// 使用示例
+async function createPost(data) {
+  try {
+    const response = await apiClient.post('/records', data);
+    return response.data;
+  } catch (error) {
+    handlePermissionError(error);
+  }
+}
+```
+
+### 5.6 常见权限字符串
+
+| 权限字符串 | 说明 |
+|-----------|------|
+| `posts:create` | 创建文章 |
+| `posts:read` | 查看文章 |
+| `posts:update` | 编辑文章 |
+| `posts:delete` | 删除文章 |
+| `posts:*` | 所有文章操作 |
+| `comments:create` | 发表评论 |
+| `files:upload` | 上传文件 |
+| `users:manage` | 管理用户 |
+| `roles:manage` | 管理角色 |
+| `*:*` | 超级管理员（所有权限） |
+
+---
+
+## 六、常见问题
 
 ### Q1: 如何处理 Token 过期？
 

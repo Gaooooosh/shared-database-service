@@ -25,14 +25,22 @@ async def get_current_user_info(
     Returns:
         用户基本信息
     """
+    # 获取用户的权限信息
+    from app.services.permission_service import PermissionService
+    perm_service = PermissionService()
+    user_permissions = await perm_service.get_user_permissions(current_user.id)
+
     return {
         "id": str(current_user.id),
         "casdoor_id": current_user.casdoor_id,
         "email": current_user.email,
         "display_name": current_user.display_name,
         "avatar": current_user.avatar,
-        "role": current_user.role,
+        "is_superuser": current_user.is_superuser,
         "is_active": current_user.is_active,
+        "primary_role_id": str(current_user.primary_role_id) if current_user.primary_role_id else None,
+        "permissions": user_permissions.get("permissions", []),
+        "roles": user_permissions.get("roles", []),
         "created_at": current_user.created_at,
         "last_login_at": current_user.last_login_at,
     }
@@ -54,12 +62,19 @@ async def refresh_user_info(
     current_user.update_last_login()
     await current_user.save()
 
+    # 获取用户的权限信息
+    from app.services.permission_service import PermissionService
+    perm_service = PermissionService()
+    user_permissions = await perm_service.get_user_permissions(current_user.id)
+
     return {
         "id": str(current_user.id),
         "casdoor_id": current_user.casdoor_id,
         "email": current_user.email,
         "display_name": current_user.display_name,
         "avatar": current_user.avatar,
-        "role": current_user.role,
+        "is_superuser": current_user.is_superuser,
         "last_login_at": current_user.last_login_at,
+        "permissions": user_permissions.get("permissions", []),
+        "roles": user_permissions.get("roles", []),
     }

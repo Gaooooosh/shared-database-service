@@ -31,10 +31,11 @@ class MongoDB:
         from app.models.user import User
         from app.models.unified_record import UnifiedRecord
         from app.models.file import File
+        from app.models.permission import Permission, Role, UserRoleAssignment
 
         await init_beanie(
             database=self.client.get_database(settings.mongodb_database),
-            document_models=[User, UnifiedRecord, File],
+            document_models=[User, UnifiedRecord, File, Permission, Role, UserRoleAssignment],
         )
 
     async def disconnect(self) -> None:

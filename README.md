@@ -50,8 +50,9 @@ Unified Backend Platform 是一个**模块化单体**架构的统一后端服务
 
 - 集成 **Casdoor** 提供企业级 SSO
 - JWT Token 验证，自动同步用户信息
-- 基于角色的访问控制 (RBAC)
-- 用户权限管理
+- **基于角色的访问控制 (RBAC)** ✨ 新功能
+- **细粒度权限管理** - 支持资源级和操作级权限控制
+- **Casdoor 权限组同步** - 自动同步 Casdoor 权限组到本地角色
 
 ### 2. 灵活数据模型
 
@@ -163,12 +164,14 @@ UnifiedRecord(
 
 ```python
 class User(Document):
-    id: UUID                    # 本地用户 ID
-    casdoor_id: str             # Casdoor 关联 ID
+    id: UUID                         # 本地用户 ID
+    casdoor_id: str                  # Casdoor 关联 ID
     email: str
     display_name: str | None
-    role: Literal["admin", "user", "guest"]
+    is_superuser: bool               # 是否为超级管理员
+    primary_role_id: UUID | None     # 主角色 ID
     last_login_at: datetime
+    permissions_cached_at: datetime | None  # 权限缓存时间
 ```
 
 #### UnifiedRecord (通用业务数据)
@@ -282,8 +285,17 @@ open http://localhost:8081
 # 访问 Casdoor 管理界面
 open http://localhost:8000
 
-# 首次访问需要创建管理员账户
+# 使用默认管理员账户登录
+# 用户名: built-in/admin
+# 密码: admin (首次登录后请立即修改)
 ```
+
+**关于 Casdoor 管理员账户**：
+
+- **默认用户名**: `built-in/admin` (格式: 组织名/用户名)
+- **默认密码**: `admin` (生产环境请立即修改)
+- 用户在 Casdoor 中以 `<organization>/<username>` 格式标识
+- 如需重置密码，请参考文档 [DEPLOYMENT.md](./DEPLOYMENT.md) 中的说明
 
 ---
 
@@ -338,6 +350,21 @@ open http://localhost:8000
 | GET | `/api/v1/files/{file_id}/download` | 下载文件 | 可选 |
 | DELETE | `/api/v1/files/{file_id}` | 删除文件 | 必须 |
 
+#### 权限管理 ✨ 新功能
+
+| 方法 | 端点 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/api/v1/permissions/me` | 获取当前用户权限 | 必须 |
+| GET | `/api/v1/permissions` | 查询权限列表 | 超级管理员 |
+| POST | `/api/v1/permissions` | 创建权限 | 超级管理员 |
+| GET | `/api/v1/permissions/roles` | 查询角色列表 | 超级管理员 |
+| POST | `/api/v1/permissions/roles` | 创建角色 | 超级管理员 |
+| PUT | `/api/v1/permissions/roles/{id}` | 更新角色 | 超级管理员 |
+| DELETE | `/api/v1/permissions/roles/{id}` | 删除角色 | 超级管理员 |
+| GET | `/api/v1/permissions/users/{user_id}/roles` | 查询用户角色 | 超级管理员 |
+| POST | `/api/v1/permissions/users/{user_id}/roles` | 分配用户角色 | 超级管理员 |
+| DELETE | `/api/v1/permissions/users/{user_id}/roles/{role_id}` | 移除用户角色 | 超级管理员 |
+
 ### API 使用示例
 
 #### 1. 获取当前用户信息
@@ -354,7 +381,9 @@ curl -X GET "http://localhost:9000/api/v1/auth/me" \
   "casdoor_id": "user_id_from_casdoor",
   "email": "user@example.com",
   "display_name": "张三",
-  "role": "user",
+  "is_superuser": false,
+  "permissions": ["posts:create", "posts:read", "posts:update"],
+  "roles": [{"id": "role-uuid", "name": "editor", "display_name": "编辑员"}],
   "created_at": "2024-01-01T00:00:00Z"
 }
 ```
@@ -530,8 +559,9 @@ curl "http://localhost:9000/api/v1/records?page=1&page_size=10&sort_by=created_a
 |------|------|----------|
 | [5分钟快速接入指南](docs/QUICKSTART.md) | 快速接入指南，5分钟上手 | 前端/移动端开发者 |
 | [开发者接入指南](docs/DEVELOPER_GUIDE.md) | 完整的接入文档，包含认证、数据、文件管理 | 前端/移动端开发者 |
+| [Casdoor 快速参考](docs/CASDOOR_GUIDE.md) | Casdoor SSO 使用指南 | 所有开发者 |
 | [API 参考手册](docs/API_REFERENCE.md) | 完整的 API 接口文档 | 所有开发者 |
-| [部署文档](DEPLOYMENT.md) | 生产环境部署指南 | 运维/后端开发者 |
+| [部署文档](docs/DEPLOYMENT.md) | 生产环境部署指南 | 运维/后端开发者 |
 | [项目架构文档](CLAUDE.md) | 详细的项目架构和开发说明 | 后端开发者 |
 
 ### 前端/移动端开发者
@@ -762,8 +792,12 @@ ruff check backend/app
 - [x] Casdoor SSO 集成
 - [x] JWT Token 验证
 - [x] 用户自动同步机制
-- [x] 基于角色的访问控制 (RBAC)
-- [x] 用户权限管理
+- [x] **基于角色的访问控制 (RBAC)** ✨ 新功能
+- [x] **细粒度权限管理** - 支持资源级和操作级权限
+- [x] **Casdoor 权限组同步** - 自动同步权限组到本地角色
+- [x] **权限缓存** - Redis 缓存用户权限，提升性能
+- [x] **通配符权限** - 支持 `posts:*` 匹配所有文章操作
+- [x] **权限管理 API** - 完整的权限和角色 CRUD 接口
 
 #### 数据管理
 - [x] UnifiedRecord 灵活数据模型
@@ -844,7 +878,22 @@ A: 请参考 [APP_DEVELOPMENT.md](./APP_DEVELOPMENT.md)，其中包含：
 
 ### Q: 如何重置 Casdoor 管理员密码？
 
-A: 访问 http://localhost:8000，首次访问会提示创建管理员账户。
+A: Casdoor 默认管理员账户为 `built-in/admin`，默认密码 `admin`。
+
+如需重置密码：
+```bash
+# 方法1: 直接在 Casdoor 管理界面修改
+# 访问 http://localhost:8000，使用管理员账户登录后修改密码
+
+# 方法2: 通过 PostgreSQL 数据库重置
+docker exec unified-postgres psql -U casdoor -d casdoor -c \
+  "UPDATE \"user\" SET password='<新的bcrypt哈希>' WHERE owner='built-in' AND name='admin';"
+```
+
+**注意**: 密码需使用 bcrypt 哈希。生成哈希：
+```bash
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt()).decode())"
+```
 
 ### Q: MongoDB 数据存储在哪里？
 

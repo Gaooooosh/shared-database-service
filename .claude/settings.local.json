@@ -18,7 +18,17 @@
       "Bash(docker:*)",
       "Bash(chmod:*)",
       "Bash(wc:*)",
-      "Bash(while read f)"
+      "Bash(while read f)",
+      "mcp__web-reader__webReader",
+      "WebSearch",
+      "mcp__Playwright__browser_navigate",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(python:*)",
+      "Bash(for:*)",
+      "Bash(do python3:*)",
+      "Bash(echo:*)",
+      "Bash(done:*)"
     ]
   }
 }

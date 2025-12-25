@@ -54,3 +54,4 @@ poetry.lock
 # Type stubs
 .pyi/
 *.pyi
+PROMPT_choir_community_app.md

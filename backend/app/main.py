@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1.endpoints import auth, files, records
+from app.api.v1.endpoints import auth, files, permissions, records
 from app.core.config import get_settings
 from app.db.mongodb import mongodb
 
@@ -181,6 +181,12 @@ app.include_router(
     auth.router,
     prefix=settings.api_prefix,
     tags=["Authentication"],
+)
+
+app.include_router(
+    permissions.router,
+    prefix=settings.api_prefix,
+    tags=["Permissions"],
 )
 
 app.include_router(

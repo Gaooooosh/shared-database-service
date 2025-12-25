@@ -9,6 +9,7 @@
 - [认证相关 API](#认证相关-api)
 - [记录管理 API](#记录管理-api)
 - [文件管理 API](#文件管理-api)
+- [权限管理 API ✨](#权限管理-api)
 - [错误处理](#错误处理)
 
 ---
@@ -577,6 +578,393 @@ DELETE /api/v1/files/file-uuid?delete_from_storage=true
 ```
 204 No Content
 ```
+
+---
+
+## 权限管理 API ✨
+
+### 1. 获取当前用户权限
+
+**端点**: `GET /api/v1/permissions/me`
+
+**请求头**:
+```
+Authorization: Bearer <token>
+```
+
+**响应**:
+```json
+{
+  "is_superuser": false,
+  "permissions": [
+    "posts:create",
+    "posts:read",
+    "posts:update",
+    "files:upload"
+  ],
+  "roles": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "editor",
+      "display_name": "编辑员",
+      "is_default": true
+    }
+  ]
+}
+```
+
+---
+
+### 2. 查询权限列表
+
+**端点**: `GET /api/v1/permissions`
+
+**请求头**:
+```
+Authorization: Bearer <token>
+```
+
+**权限要求**: 超级管理员
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| resource_type | string | ❌ | 过滤资源类型 |
+| app_identifier | string | ❌ | 过滤应用标识符 |
+| page | number | ❌ | 页码（默认 1） |
+| page_size | number | ❌ | 每页数量（默认 50） |
+
+**请求示例**:
+```
+GET /api/v1/permissions?resource_type=posts&page=1&page_size=20
+```
+
+**响应**:
+```json
+{
+  "items": [
+    {
+      "id": "perm-uuid-1",
+      "name": "posts:create",
+      "display_name": "创建文章",
+      "resource_type": "posts",
+      "action": "create",
+      "app_identifier": null,
+      "is_system": true
+    },
+    {
+      "id": "perm-uuid-2",
+      "name": "posts:read",
+      "display_name": "查看文章",
+      "resource_type": "posts",
+      "action": "read",
+      "app_identifier": null,
+      "is_system": true
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 3
+}
+```
+
+---
+
+### 3. 创建权限
+
+**端点**: `POST /api/v1/permissions`
+
+**请求头**:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**权限要求**: 超级管理员
+
+**请求体**:
+```json
+{
+  "name": "posts:publish",
+  "display_name": "发布文章",
+  "resource_type": "posts",
+  "action": "publish",
+  "app_identifier": null
+}
+```
+
+**响应**:
+```json
+{
+  "id": "new-perm-uuid",
+  "name": "posts:publish",
+  "display_name": "发布文章",
+  "resource_type": "posts",
+  "action": "publish",
+  "app_identifier": null,
+  "is_system": false,
+  "created_at": "2024-12-25T12:00:00Z"
+}
+```
+
+---
+
+### 4. 查询角色列表
+
+**端点**: `GET /api/v1/permissions/roles`
+
+**请求头**:
+```
+Authorization: Bearer <token>
+```
+
+**权限要求**: 超级管理员
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| app_identifier | string | ❌ | 过滤应用标识符 |
+| is_system | boolean | ❌ | 是否为系统角色 |
+| is_default | boolean | ❌ | 是否为默认角色 |
+| page | number | ❌ | 页码 |
+| page_size | number | ❌ | 每页数量 |
+
+**响应**:
+```json
+{
+  "items": [
+    {
+      "id": "role-uuid-1",
+      "name": "editor",
+      "display_name": "编辑员",
+      "permission_ids": ["perm-1", "perm-2", "perm-3"],
+      "app_identifier": null,
+      "casdoor_group_name": "editors",
+      "is_system": false,
+      "is_default": false,
+      "created_at": "2024-12-25T12:00:00Z"
+    }
+  ],
+  "total": 10,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+---
+
+### 5. 创建角色
+
+**端点**: `POST /api/v1/permissions/roles`
+
+**请求头**:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**权限要求**: 超级管理员
+
+**请求体**:
+```json
+{
+  "name": "moderator",
+  "display_name": "版主",
+  "permission_ids": ["perm-1", "perm-2", "perm-3"],
+  "app_identifier": "forum-app",
+  "casdoor_group_name": "moderators",
+  "is_default": false
+}
+```
+
+**响应**:
+```json
+{
+  "id": "new-role-uuid",
+  "name": "moderator",
+  "display_name": "版主",
+  "permission_ids": ["perm-1", "perm-2", "perm-3"],
+  "app_identifier": "forum-app",
+  "casdoor_group_name": "moderators",
+  "is_system": false,
+  "is_default": false,
+  "created_at": "2024-12-25T12:00:00Z"
+}
+```
+
+---
+
+### 6. 更新角色
+
+**端点**: `PUT /api/v1/permissions/roles/{role_id}`
+
+**路径参数**:
+- `role_id`: 角色 ID (UUID)
+
+**请求头**:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**权限要求**: 超级管理员
+
+**请求体**:
+```json
+{
+  "display_name": "高级版主",
+  "permission_ids": ["perm-1", "perm-2", "perm-3", "perm-4"],
+  "is_default": true
+}
+```
+
+**响应**:
+```json
+{
+  "id": "role-uuid",
+  "name": "moderator",
+  "display_name": "高级版主",
+  "permission_ids": ["perm-1", "perm-2", "perm-3", "perm-4"],
+  "updated_at": "2024-12-25T13:00:00Z"
+}
+```
+
+---
+
+### 7. 删除角色
+
+**端点**: `DELETE /api/v1/permissions/roles/{role_id}`
+
+**路径参数**:
+- `role_id`: 角色 ID (UUID)
+
+**请求头**:
+```
+Authorization: Bearer <token>
+```
+
+**权限要求**: 超级管理员
+
+**响应**:
+```
+204 No Content
+```
+
+---
+
+### 8. 查询用户角色
+
+**端点**: `GET /api/v1/permissions/users/{user_id}/roles`
+
+**路径参数**:
+- `user_id`: 用户 ID (UUID)
+
+**请求头**:
+```
+Authorization: Bearer <token>
+```
+
+**权限要求**: 超级管理员
+
+**响应**:
+```json
+{
+  "user_id": "user-uuid",
+  "roles": [
+    {
+      "id": "role-uuid-1",
+      "name": "editor",
+      "display_name": "编辑员",
+      "app_identifier": null
+    }
+  ]
+}
+```
+
+---
+
+### 9. 分配用户角色
+
+**端点**: `POST /api/v1/permissions/users/{user_id}/roles`
+
+**路径参数**:
+- `user_id`: 用户 ID (UUID)
+
+**请求头**:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**权限要求**: 超级管理员
+
+**请求体**:
+```json
+{
+  "role_id": "role-uuid",
+  "app_identifier": null
+}
+```
+
+**响应**:
+```json
+{
+  "id": "assignment-uuid",
+  "user_id": "user-uuid",
+  "role_id": "role-uuid",
+  "app_identifier": null,
+  "is_active": true,
+  "created_at": "2024-12-25T12:00:00Z"
+}
+```
+
+---
+
+### 10. 移除用户角色
+
+**端点**: `DELETE /api/v1/permissions/users/{user_id}/roles/{role_id}`
+
+**路径参数**:
+- `user_id`: 用户 ID (UUID)
+- `role_id`: 角色 ID (UUID)
+
+**请求头**:
+```
+Authorization: Bearer <token>
+```
+
+**权限要求**: 超级管理员
+
+**响应**:
+```
+204 No Content
+```
+
+---
+
+## 权限格式说明
+
+### 权限命名规范
+
+权限字符串格式为 `resource:action`：
+
+| 资源 (resource) | 操作 (action) | 示例 |
+|-----------------|---------------|------|
+| `posts` | `create`, `read`, `update`, `delete` | `posts:create` |
+| `users` | `create`, `read`, `update`, `delete` | `users:manage` |
+| `files` | `upload`, `read`, `delete` | `files:upload` |
+| `comments` | `create`, `read`, `update`, `delete` | `comments:create` |
+
+### 通配符权限
+
+| 权限 | 匹配范围 | 示例 |
+|------|----------|------|
+| `posts:*` | 所有文章操作 | 匹配 `posts:create`, `posts:read`, `posts:update`, `posts:delete` |
+| `*:*` | 所有资源所有操作 | 匹配所有权限 |
+| `*:read` | 所有资源的读取操作 | 匹配 `posts:read`, `users:read`, `files:read` |
 
 ---
 

@@ -11,13 +11,6 @@ from beanie import Document, Indexed
 from pydantic import Field, field_validator
 
 
-class UserRole:
-    """用户角色常量"""
-    ADMIN = "admin"
-    USER = "user"
-    GUEST = "guest"
-
-
 class User(Document):
     """
     本地用户映射模型
@@ -41,12 +34,20 @@ class User(Document):
     avatar: str | None = Field(default=None, description="头像 URL")
     phone: str | None = Field(default=None, description="手机号")
 
-    role: Literal["admin", "user", "guest"] = Field(
-        default=UserRole.USER,
-        description="用户角色",
+    # ==========================================================================
+    # 权限相关字段
+    # ==========================================================================
+    is_superuser: bool = Field(
+        default=False,
+        description="超级管理员标记 (拥有所有权限)"
     )
 
     is_active: bool = Field(default=True, description="是否激活")
+
+    primary_role_id: UUID | None = Field(
+        default=None,
+        description="主角色 ID (用于快速判断)"
+    )
 
     # ==========================================================================
     # 元数据
@@ -54,6 +55,11 @@ class User(Document):
     created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
     last_login_at: datetime | None = Field(default=None, description="最后登录时间")
+
+    permissions_cached_at: datetime | None = Field(
+        default=None,
+        description="权限缓存最后更新时间"
+    )
 
     # ==========================================================================
     # Beanie 配置
@@ -63,8 +69,10 @@ class User(Document):
         indexes = [
             "casdoor_id",
             "email",
-            "role",
+            "is_superuser",
+            "is_active",
             "created_at",
+            "primary_role_id",
         ]
 
     @field_validator("email")

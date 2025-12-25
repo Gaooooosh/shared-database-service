@@ -33,12 +33,14 @@
 
 | 端口 | 服务 | 说明 |
 |------|------|------|
-| 3000 | Casdoor | SSO 管理界面 |
-| 3001 | Mongo Express | 数据库管理界面 |
-| 3002 | Backend | FastAPI 后端 |
+| 8000 | Casdoor | SSO 管理界面 |
+| 8081 | Mongo Express | 数据库管理界面 |
+| 9000 | Backend | FastAPI 后端 |
 | 27017 | MongoDB | 数据库 (建议不对外暴露) |
 | 5432 | PostgreSQL | Casdoor 数据库 (建议不对外暴露) |
 | 6379 | Redis | 缓存 (建议不对外暴露) |
+| 9100 | MinIO API | 对象存储 API |
+| 9101 | MinIO Console | MinIO 管理界面 |
 
 ### 安全检查清单
 
@@ -116,7 +118,7 @@ nano .env.production
 # 应用配置
 # =============================================================================
 ENVIRONMENT=production
-BACKEND_PORT=3002
+BACKEND_PORT=9000
 CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 
 # =============================================================================
@@ -128,7 +130,7 @@ MONGO_DATABASE=unified_backend
 MONGO_PORT=27017
 
 # Mongo Express (生产环境建议禁用或限制访问)
-MONGO_EXPR_PORT=3001
+MONGO_EXPR_PORT=8081
 MONGO_EXPR_USERNAME=admin
 MONGO_EXPR_PASSWORD=CHANGE_ME_TO_STRONG_PASSWORD_32chars
 
@@ -149,7 +151,7 @@ REDIS_PORT=6379
 # =============================================================================
 # Casdoor 配置
 # =============================================================================
-CASDOOR_PORT=3000
+CASDOOR_PORT=8000
 CASDOOR_ORIGIN=https://casdoor.yourdomain.com
 
 # =============================================================================
@@ -466,11 +468,39 @@ docker compose exec mongo mongosh \
 
 #### 5. Casdoor 登录失败
 
+**Casdoor 默认管理员账户**：
+- 用户名: `built-in/admin` (格式: 组织名/用户名)
+- 密码: `admin`
+
+**方法1: 在 Casdoor 界面重置密码**
+```
+1. 访问 http://localhost:8000
+2. 使用管理员账户登录
+3. 进入用户管理页面修改密码
+```
+
+**方法2: 通过 PostgreSQL 重置密码**
+
 ```bash
-# 重置 Casdoor 管理员密码
+# 1. 生成新的 bcrypt 密码哈希
+docker exec unified-backend python3 -c "
+import bcrypt
+password = 'your_new_password'
+hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+print(hash)
+"
+
+# 2. 更新数据库
 docker compose exec postgres psql \
   -U casdoor -d casdoor \
-  -c "UPDATE user SET password='$2a$10$...', salt='...' WHERE name='admin'"
+  -c "UPDATE \"user\" SET password='<生成的哈希>' WHERE owner='built-in' AND name='admin';"
+```
+
+**方法3: 查询当前用户信息**
+```bash
+# 查看所有用户
+docker compose exec postgres psql -U casdoor -d casdoor \
+  -c "SELECT owner, name, email FROM \"user\" WHERE owner='built-in';"
 ```
 
 ### 日志级别调整

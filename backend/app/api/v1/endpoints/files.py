@@ -19,6 +19,7 @@ from app.api.v1.schemas.file import (
     PresignedUploadResponse,
 )
 from app.core.config import get_settings
+from app.core.permissions import require_permission
 from app.core.security import get_current_user, get_current_user_optional
 from app.models.file import File, FileCategory, FileStatus
 from app.models.user import User
@@ -328,7 +329,7 @@ async def get_file(
     # Permission check
     if not file_record.is_public:
         if not current_user or (
-            file_record.owner_id != current_user.id and current_user.role != "admin"
+            file_record.owner_id != current_user.id and not current_user.is_superuser
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -356,7 +357,7 @@ async def download_file(
     # Permission check
     if not file_record.is_public:
         if not current_user or (
-            file_record.owner_id != current_user.id and current_user.role != "admin"
+            file_record.owner_id != current_user.id and not current_user.is_superuser
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -412,7 +413,7 @@ async def update_file_metadata(
     file_record = await get_file_or_404(file_id)
 
     # Permission check
-    if file_record.owner_id != current_user.id and current_user.role != "admin":
+    if file_record.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: not the owner",
@@ -450,7 +451,7 @@ async def delete_file(
     file_record = await get_file_or_404(file_id)
 
     # Permission check
-    if file_record.owner_id != current_user.id and current_user.role != "admin":
+    if file_record.owner_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: not the owner",
