@@ -44,8 +44,30 @@ class Settings(BaseSettings):
     # Casdoor / JWT 配置
     # ==========================================================================
     casdoor_origin: str = Field(..., description="Casdoor 服务地址")
-    jwt_secret: str = Field(..., min_length=32, description="JWT 签名密钥")
-    jwt_algorithm: str = Field(default="HS256", description="JWT 加密算法")
+    casdoor_organization: str = Field(default="built-in", description="Casdoor 组织名")
+    casdoor_client_id: str = Field(
+        default="c7152acfa4e28bee5910",
+        description="Casdoor 应用 Client ID"
+    )
+    casdoor_client_secret: str = Field(
+        default="40314734dc3b413cd5fe97e37ebc71bb14f7d206",
+        description="Casdoor 应用 Client Secret"
+    )
+
+    # JWT 配置 - 支持证书模式 (RS256) 和 共享密钥模式 (HS256)
+    jwt_algorithm: str = Field(
+        default="RS256",
+        description="JWT 加密算法 (RS256=证书模式, HS256=共享密钥模式)"
+    )
+    casdoor_jwks_url: str = Field(
+        default="http://unified-casdoor:8000/.well-known/jwks",
+        description="Casdoor JWKS 端点 (RS256模式下获取公钥, Docker网络内使用服务名)"
+    )
+    jwt_secret: str = Field(
+        default="fallback-secret-not-used-in-rs256-mode",
+        min_length=32,
+        description="JWT 签名密钥 (仅HS256模式使用)"
+    )
     jwt_exp_seconds: int = Field(default=86400, description="JWT 过期时间 (秒)")
 
     # ==========================================================================

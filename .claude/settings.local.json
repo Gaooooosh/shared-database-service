@@ -28,7 +28,11 @@
       "Bash(for:*)",
       "Bash(do python3:*)",
       "Bash(echo:*)",
-      "Bash(done:*)"
+      "Bash(done:*)",
+      "Bash(pip3 show:*)",
+      "Bash(pkill:*)",
+      "Bash(__NEW_LINE__ sleep 60)",
+      "Bash(mkdir:*)"
     ]
   }
 }

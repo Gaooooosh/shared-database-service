@@ -219,16 +219,18 @@ services:
       # ---------- 数据库配置 ----------
       # MongoDB 连接字符串（会使用容器内用户名密码）
       MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongo:27017/${MONGO_DATABASE:-unified_backend}?authSource=admin
-      # Redis 连接 URL（支持密码）
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      # Redis 连接 URL（当前 Redis 未设置密码）
+      REDIS_URL: redis://redis:6379/0
 
       # ---------- 认证配置 ----------
       # ⚠️ 重点配置: Casdoor 服务地址（需与上面 casdoor.origin 保持一致）
       CASDOOR_ORIGIN: ${CASDOOR_ORIGIN:-http://localhost:8000}
-      # ⚠️ 重点配置: JWT 密钥（需与上面 casdoor.jwtSecret 保持一致）
+      # ⚠️ 重点配置: JWT 密钥（仅HS256模式需要）
       JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-string-at-least-32-characters-long}
-      # JWT 加密算法（通常使用 HS256）
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      # JWT 加密算法（RS256=证书模式, HS256=共享密钥模式）
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-RS256}
+      # Casdoor JWKS 端点（RS256模式下获取公钥）
+      CASDOOR_JWKS_URL: ${CASDOOR_JWKS_URL:-http://unified-casdoor:8000/.well-known/jwks}
 
       # ---------- 对象存储配置 ----------
       # MinIO 内部访问地址（容器间通信）

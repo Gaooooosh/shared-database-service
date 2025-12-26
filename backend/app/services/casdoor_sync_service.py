@@ -35,12 +35,14 @@ class CasdoorSyncService:
     async def get_user_casdoor_groups(
         self,
         casdoor_user_id: str,
+        email: str | None = None,
     ) -> list[str]:
         """
         从 Casdoor 获取用户的权限组列表
 
         Args:
-            casdoor_user_id: Casdoor 用户 ID
+            casdoor_user_id: Casdoor 用户 ID (UUID 或 owner/username 格式)
+            email: 用户邮箱 (可选，优先使用邮箱查询)
 
         Returns:
             权限组名称列表 (如 ["admin", "editor", "author"])
@@ -51,31 +53,55 @@ class CasdoorSyncService:
         """
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                # 调用 Casdoor API 获取用户信息
-                # 注意: 需要配置 Casdoor 的客户端凭据
+                # 方案1: 如果有邮箱，优先使用邮箱查询
+                if email:
+                    response = await client.get(
+                        f"{self.casdoor_api_base}/get-user",
+                        params={
+                            "email": email,
+                            "client_id": settings.casdoor_client_id,
+                            "client_secret": settings.casdoor_client_secret,
+                        },
+                    )
+
+                    if response.status_code == 200:
+                        api_data = response.json()
+                        if api_data.get("status") == "ok" and api_data.get("data"):
+                            user_data = api_data.get("data", {})
+                            groups = user_data.get("groups") or user_data.get("permissions") or user_data.get("tags") or []
+                            print(f"📋 Casdoor groups for {email}: {groups}")
+                            return groups
+
+                # 方案2: 使用用户 ID 查询 (owner/username 格式或 UUID)
                 response = await client.get(
                     f"{self.casdoor_api_base}/get-user",
-                    params={"id": casdoor_user_id},
+                    params={
+                        "id": casdoor_user_id,
+                        "owner": settings.casdoor_organization,
+                        "client_id": settings.casdoor_client_id,
+                        "client_secret": settings.casdoor_client_secret,
+                    },
                 )
 
                 if response.status_code == 200:
-                    user_data = response.json()
-                    # Casdoor 用户数据中的权限组字段
-                    # 根据实际 Casdoor API 响应调整字段名
-                    groups = user_data.get("permissions") or user_data.get("groups") or []
-                    return groups
-                else:
-                    print(f"Casdoor API error: {response.status_code}")
-                    return []
+                    api_data = response.json()
+                    if api_data.get("status") == "ok" and api_data.get("data"):
+                        user_data = api_data.get("data", {})
+                        groups = user_data.get("groups") or user_data.get("permissions") or user_data.get("tags") or []
+                        print(f"📋 Casdoor groups for {casdoor_user_id}: {groups}")
+                        return groups
+
+                print(f"⚠️  未找到用户或无权限组")
+                return []
 
         except httpx.TimeoutException:
-            print("Casdoor API timeout")
+            print("⏱️  Casdoor API timeout")
             return []
         except httpx.HTTPError as e:
-            print(f"Casdoor API error: {e}")
+            print(f"❌ Casdoor API HTTP error: {e}")
             return []
         except Exception as e:
-            print(f"Error fetching Casdoor groups: {e}")
+            print(f"❌ Error fetching Casdoor groups: {e}")
             return []
 
     # ==============================================================================
@@ -87,6 +113,7 @@ class CasdoorSyncService:
         user_id: UUID,
         casdoor_user_id: str,
         app_identifier: str | None = None,
+        email: str | None = None,
     ) -> dict[str, Any]:
         """
         将 Casdoor 权限组同步到本地角色
@@ -95,6 +122,7 @@ class CasdoorSyncService:
             user_id: 本地用户 ID
             casdoor_user_id: Casdoor 用户 ID
             app_identifier: 应用标识符 (None 表示全局权限)
+            email: 用户邮箱 (用于 UUID 查询时的辅助)
 
         Returns:
             {
@@ -105,7 +133,7 @@ class CasdoorSyncService:
             }
         """
         # 1. 获取 Casdoor 权限组
-        casdoor_groups = await self.get_user_casdoor_groups(casdoor_user_id)
+        casdoor_groups = await self.get_user_casdoor_groups(casdoor_user_id, email=email)
 
         if not casdoor_groups:
             return {
@@ -122,21 +150,21 @@ class CasdoorSyncService:
 
         for group_name in casdoor_groups:
             # 查找或创建角色
-            role = await self.get_or_create_role_from_group(group_name, app_identifier)
+            role, is_new_role = await self.get_or_create_role_from_group(group_name, app_identifier)
             if not role:
                 continue
 
-            if getattr(role, "is_new", False):
+            if is_new_role:
                 roles_created += 1
 
             # 创建角色分配
-            assignment = await self.create_user_role_assignment(
+            assignment, is_new_assignment = await self.create_user_role_assignment(
                 user_id=user_id,
                 role_id=role.id,
                 app_identifier=app_identifier,
             )
 
-            if assignment and getattr(assignment, "is_new", False):
+            if assignment and is_new_assignment:
                 assignments_created += 1
 
         return {
@@ -150,7 +178,7 @@ class CasdoorSyncService:
         self,
         group_name: str,
         app_identifier: str | None = None,
-    ) -> Role | None:
+    ) -> tuple[Role | None, bool]:
         """
         根据 Casdoor 权限组名称查找或创建本地角色
 
@@ -159,17 +187,18 @@ class CasdoorSyncService:
             app_identifier: 应用标识符
 
         Returns:
-            Role 对象 (带有 is_new 属性标记是否新创建)
+            (Role对象, 是否新创建)
         """
+        # 构造查询条件
+        query_filters = [Role.casdoor_group_name == group_name]
+        if app_identifier is not None:
+            query_filters.append(Role.app_identifier == app_identifier)
+
         # 查找现有角色
-        existing_role = await Role.find_one(
-            Role.casdoor_group_name == group_name,
-            Role.app_identifier == app_identifier if app_identifier else True,
-        )
+        existing_role = await Role.find_one(*query_filters)
 
         if existing_role:
-            existing_role.is_new = False  # type: ignore
-            return existing_role
+            return existing_role, False
 
         # 创建新角色
         try:
@@ -183,18 +212,17 @@ class CasdoorSyncService:
                 is_system=False,
             )
             await new_role.insert()
-            new_role.is_new = True  # type: ignore
-            return new_role
+            return new_role, True
         except Exception as e:
             print(f"Error creating role from group {group_name}: {e}")
-            return None
+            return None, False
 
     async def create_user_role_assignment(
         self,
         user_id: UUID,
         role_id: UUID,
         app_identifier: str | None = None,
-    ) -> UserRoleAssignment | None:
+    ) -> tuple[UserRoleAssignment | None, bool]:
         """
         创建用户角色分配（如果不存在）
 
@@ -204,18 +232,20 @@ class CasdoorSyncService:
             app_identifier: 应用标识符
 
         Returns:
-            UserRoleAssignment 对象 (带有 is_new 属性标记是否新创建)
+            (UserRoleAssignment对象, 是否新创建)
         """
         # 检查是否已存在
-        existing = await UserRoleAssignment.find_one(
+        query_filters = [
             UserRoleAssignment.user_id == user_id,
             UserRoleAssignment.role_id == role_id,
-            UserRoleAssignment.app_identifier == app_identifier if app_identifier else True,
-        )
+        ]
+        if app_identifier is not None:
+            query_filters.append(UserRoleAssignment.app_identifier == app_identifier)
+
+        existing = await UserRoleAssignment.find_one(*query_filters)
 
         if existing:
-            existing.is_new = False  # type: ignore
-            return existing
+            return existing, False
 
         # 创建新分配
         try:
@@ -226,11 +256,10 @@ class CasdoorSyncService:
                 is_active=True,
             )
             await new_assignment.insert()
-            new_assignment.is_new = True  # type: ignore
-            return new_assignment
+            return new_assignment, True
         except Exception as e:
             print(f"Error creating role assignment: {e}")
-            return None
+            return None, False
 
     # ==============================================================================
     # 手动同步触发
@@ -254,10 +283,11 @@ class CasdoorSyncService:
             同步结果
         """
         # 1. 删除现有角色分配
-        await UserRoleAssignment.find(
-            UserRoleAssignment.user_id == user_id,
-            UserRoleAssignment.app_identifier == app_identifier if app_identifier else True,
-        ).delete_many()
+        query_filters = [UserRoleAssignment.user_id == user_id]
+        if app_identifier is not None:
+            query_filters.append(UserRoleAssignment.app_identifier == app_identifier)
+
+        await UserRoleAssignment.find(*query_filters).delete_many()
 
         # 2. 重新同步
         result = await self.sync_groups_to_local_roles(

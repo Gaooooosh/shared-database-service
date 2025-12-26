@@ -272,6 +272,164 @@ function Dashboard() {
 }
 ```
 
+### 1.4 前端 OAuth 集成最佳实践 ⭐
+
+基于实际项目经验，以下是在前端集成 Casdoor OAuth 的关键注意事项。
+
+#### ⚠️ 架构选择：推荐标准 OAuth 2.0
+
+**推荐**：标准 OAuth 2.0 Authorization Code Flow（本项目默认方式）
+
+**不推荐**：PKCE Flow（除非是纯前端应用，无法安全存储 client_secret）
+
+原因：
+- PKCE 增加状态管理复杂度
+- 容易出现 "Invalid State" 错误
+- 本项目后端已有完整的 JWT 验证能力
+
+#### 🔥 关键问题：状态同步
+
+**最常见的错误**：登录后"闪回"到登录页
+
+**原因分析**：
+```typescript
+// ❌ 错误做法
+localStorage.setItem('jwt_token', token);
+localStorage.setItem('user', JSON.stringify(payload));
+// 问题：组件从状态管理库（如 Zustand/Redux）读取登录状态
+// 但状态管理库并未更新，导致认为用户未登录
+```
+
+**正确做法**：
+```typescript
+// ✅ 正确做法
+// 1. 保存 token
+localStorage.setItem('jwt_token', token);
+
+// 2. 🔥 关键：更新状态管理库
+const userData = {
+  id: payload.sub,
+  display_name: payload.displayName,
+  email: payload.email,
+  avatar: payload.avatar,
+  // ... 其他字段
+};
+setUser(userData);  // 更新 Zustand/Redux 状态
+```
+
+**完整示例（使用 Zustand）**：
+
+```typescript
+// stores/authStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface AuthUser {
+  id: string;
+  display_name: string;
+  email: string;
+  avatar: string | null;
+}
+
+interface AuthState {
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  setUser: (user: AuthUser | null) => void;
+  logout: () => void;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      isAuthenticated: false,
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      logout: () => {
+        localStorage.removeItem('jwt_token');
+        set({ user: null, isAuthenticated: false });
+      },
+    }),
+    { name: 'auth-storage' }
+  )
+);
+
+// services/auth.ts
+export async function handleCallback(code: string) {
+  const response = await axios.get(`${CASDOOR_ORIGIN}/api/login/oauth/access_token`, {
+    params: {
+      client_id: casdoorConfig.clientId,
+      client_secret: 'your-client-secret',
+      code,
+      grant_type: 'authorization_code',
+    }
+  });
+
+  const token = response.data.access_token;
+
+  // 解析 JWT payload
+  const payload = JSON.parse(atob(token.split('.')[1]));
+
+  // ✅ 保存 token
+  localStorage.setItem('jwt_token', token);
+
+  // ✅ 更新状态管理库
+  const userData = {
+    id: payload.sub,
+    display_name: payload.displayName,
+    email: payload.email,
+    avatar: payload.avatar,
+  };
+  useAuthStore.getState().setUser(userData);  // 🔥 关键步骤
+
+  return token;
+}
+```
+
+#### 📋 调试技巧
+
+**1. 添加详细日志**
+
+```typescript
+console.log('🔄 OAuth callback triggered');
+console.log('✅ 获取到 code:', code?.substring(0, 20) + '...');
+console.log('🔄 正在交换 access token...');
+console.log('✅ Token 交换成功');
+console.log('📝 Token payload:', payload);
+console.log('✅ 更新 authStore 用户信息:', userData);
+```
+
+**2. 检查状态同步**
+
+```javascript
+// 在浏览器控制台运行
+const store = JSON.parse(localStorage.getItem('auth-storage'));
+console.log('isAuthenticated:', store?.state?.isAuthenticated);
+console.log('user:', store?.state?.user);
+
+// 如果 isAuthenticated = false，说明状态未同步
+```
+
+**3. 测试清单**
+
+- [ ] 点击登录按钮，正确跳转到 Casdoor
+- [ ] 登录后正确跳转回 callback URL
+- [ ] Token 交换成功（控制台无错误）
+- [ ] `authStore` 状态正确更新（`isAuthenticated = true`）
+- [ ] Header 显示用户头像和名称
+- [ ] 刷新页面后登录状态保持
+
+#### 🚨 常见错误及解决方案
+
+| 错误症状 | 可能原因 | 解决方案 |
+|---------|---------|---------|
+| 登录后"闪回"登录页 | authStore 未更新 | 调用 `setUser(userData)` 更新状态 |
+| "Invalid State" 错误 | 使用了 PKCE Flow | 改用标准 OAuth 2.0 流程 |
+| chrome-error://chromewebdata/ | 使用了 `sdk.signin_redirect()` | 改用手动跳转 `window.location.href = url` |
+| Token 交换失败 | Client ID/Secret 配置错误 | 检查 `.env` 文件和 Casdoor 应用配置 |
+| redirect_uri_mismatch | 回调 URL 不匹配 | 检查 Casdoor 应用配置和前端环境变量 |
+
+**详细调试指南**：请参考 [Casdoor 完整指南](./CASDOOR_GUIDE.md#常见问题诊断与解决-)
+
 ---
 
 ## 二、数据库 CRUD 操作

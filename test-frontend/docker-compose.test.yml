@@ -1,0 +1,49 @@
+# =============================================================================
+# 测试前端 Docker Compose 配置
+# =============================================================================
+# 用于独立运行测试前端（依赖后端服务已启动）
+# =============================================================================
+
+services:
+  # =============================================================================
+  # 测试前端 - Vite 开发服务器
+  # =============================================================================
+  test-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test-frontend
+    restart: unless-stopped
+    environment:
+      # Casdoor 配置
+      VITE_CASDOOR_ORIGIN: ${CASDOOR_ORIGIN:-http://localhost:8000}
+      VITE_CASDOOR_CLIENT_ID: test-client-id
+      VITE_CASDOOR_CLIENT_SECRET: test-client-secret
+      VITE_CASDOOR_APP_NAME: test-app
+      VITE_CASDOOR_ORGANIZATION: test-org
+
+      # 后端 API 配置
+      VITE_API_BASE_URL: ${BACKEND_URL:-http://localhost:9000/api/v1}
+
+      # 应用配置
+      VITE_APP_NAME: 后端测试前端
+      VITE_APP_IDENTIFIER: test-app
+    ports:
+      - "${FRONTEND_PORT:-3002}:3002"
+    volumes:
+      # 开发模式：挂载源代码实现热重载
+      - ./src:/app/src:ro
+      - ./index.html:/app/index.html:ro
+      - ./package.json:/app/package.json:ro
+      - ./vite.config.ts:/app/vite.config.ts:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+    networks:
+      - unified-network
+    command: npm run dev -- --host 0.0.0.0
+
+# =============================================================================
+# 网络配置 - 使用后端相同的网络
+# =============================================================================
+networks:
+  unified-network:
+    external: true

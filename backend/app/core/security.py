@@ -2,18 +2,116 @@
 Unified Backend Platform - Security & Authentication
 
 实现 JWT 验证和 Casdoor 集成
+支持 RS256 (证书模式) 和 HS256 (共享密钥模式)
 """
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from jose import JWTError, jwt
+import httpx
+from jose import JWTError, jwk, jwt
+from jose.utils import base64url_decode
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.models.user import User
 
 settings = get_settings()
+
+
+# =============================================================================
+# JWKS 公钥获取器 (RS256 模式)
+# =============================================================================
+class JWKSFetcher:
+    """
+    从 Casdoor JWKS 端点获取公钥
+
+    JWKS (JSON Web Key Set) 是一种存储公钥的标准格式
+    Casdoor 通过 /.well-known/jwks 端点暴露公钥
+    """
+
+    def __init__(self, jwks_url: str):
+        self.jwks_url = jwks_url
+        self._public_keys: dict[str, Any] = {}  # kid -> 公钥缓存
+        self._last_fetch: float = 0
+        self._cache_ttl: int = 3600  # 缓存1小时
+
+    async def get_public_key(self, kid: str | None = None) -> Any:
+        """
+        获取 RSA 公钥
+
+        Args:
+            kid: Key ID (JWT header中的kid字段)
+
+        Returns:
+            RSA 公钥对象 (jwk.RSAKey)
+
+        Raises:
+            JWTError: 无法获取公钥
+        """
+        # 检查缓存
+        if kid and kid in self._public_keys:
+            return self._public_keys[kid]
+
+        # 检查是否需要刷新缓存
+        import time
+
+        current_time = time.time()
+        if self._public_keys and (current_time - self._last_fetch) < self._cache_ttl:
+            # 缓存有效，返回第一个公钥（如果没有指定kid）
+            if not kid:
+                return next(iter(self._public_keys.values()))
+
+        # 从 Casdoor 获取最新公钥
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(self.jwks_url)
+                response.raise_for_status()
+                jwks_data = response.json()
+
+                # 解析并缓存公钥
+                for key_data in jwks_data.get("keys", []):
+                    # 构建 RSA 公钥
+                    rsa_key = jwk.construct(key_data)
+                    kid_value = key_data.get("kid")
+                    if kid_value:
+                        self._public_keys[kid_value] = rsa_key
+
+                self._last_fetch = current_time
+
+                # 返回请求的公钥
+                if kid:
+                    if kid not in self._public_keys:
+                        raise JWTError(f"Public key with kid '{kid}' not found")
+                    return self._public_keys[kid]
+
+                # 返回第一个公钥
+                if self._public_keys:
+                    return next(iter(self._public_keys.values()))
+
+                raise JWTError("No public keys found in JWKS")
+
+        except httpx.HTTPError as e:
+            raise JWTError(f"Failed to fetch JWKS: {str(e)}") from e
+        except Exception as e:
+            raise JWTError(f"Error parsing JWKS: {str(e)}") from e
+
+    def clear_cache(self):
+        """清除公钥缓存"""
+        self._public_keys.clear()
+        self._last_fetch = 0
+
+
+# 全局 JWKS 获取器实例
+_jwks_fetcher: JWKSFetcher | None = None
+
+
+def get_jwks_fetcher() -> JWKSFetcher:
+    """获取 JWKS 获取器单例"""
+    global _jwks_fetcher
+    if _jwks_fetcher is None:
+        _jwks_fetcher = JWKSFetcher(settings.casdoor_jwks_url)
+    return _jwks_fetcher
 
 
 # =============================================================================
@@ -31,11 +129,15 @@ class JWTPayload(BaseModel):
 
 
 # =============================================================================
-# JWT 验证
+# JWT 验证 (支持 RS256 和 HS256)
 # =============================================================================
-def decode_jwt_token(token: str) -> JWTPayload:
+async def decode_jwt_token(token: str) -> JWTPayload:
     """
-    解码并验证 JWT Token
+    解码并验证 JWT Token (异步版本)
+
+    支持:
+    - RS256: 从 Casdoor JWKS 获取公钥验证
+    - HS256: 使用共享密钥验证
 
     Args:
         token: Bearer Token (不含 "Bearer " 前缀)
@@ -45,64 +147,113 @@ def decode_jwt_token(token: str) -> JWTPayload:
 
     Raises:
         JWTError: Token 无效或过期
+
+    注意:
+        此函数是异步的，避免事件循环冲突
     """
     try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=[settings.jwt_algorithm],
-        )
+        # 获取 JWT header（不含验证）以确定算法和kid
+        header = jwt.get_unverified_header(token)
+
+        # 根据配置的算法选择验证方式
+        if settings.jwt_algorithm == "RS256":
+            # RS256 模式：使用公钥验证
+            kid = header.get("kid")
+
+            # ✅ 异步从 JWKS 获取公钥
+            fetcher = get_jwks_fetcher()
+            public_key = await fetcher.get_public_key(kid)
+
+            if not public_key:
+                raise JWTError(f"Public key not found for kid: {kid}")
+
+            # 使用公钥验证 JWT
+            payload = jwt.decode(
+                token,
+                public_key.to_pem().decode('utf-8') if hasattr(public_key.to_pem(), 'decode') else public_key.to_pem(),
+                algorithms=[settings.jwt_algorithm],
+                options={"verify_aud": False},  # Casdoor JWT 可能不包含 aud
+            )
+
+        else:  # HS256
+            # HS256 模式：使用共享密钥验证
+            payload = jwt.decode(
+                token,
+                settings.jwt_secret,
+                algorithms=[settings.jwt_algorithm],
+            )
+
         return JWTPayload(**payload)
+
     except JWTError as e:
         raise JWTError(f"Invalid token: {str(e)}") from e
+    except Exception as e:
+        raise JWTError(f"Error decoding token: {str(e)}") from e
 
 
-def validate_token(token: str) -> JWTPayload:
+async def validate_token(token: str) -> JWTPayload:
     """
-    验证 Token 并返回 payload
+    验证 Token 并返回 payload (异步版本)
 
     这是 FastAPI Dependency 的核心函数
+
+    Args:
+        token: Authorization header 值 (可能包含 "Bearer " 前缀)
+
+    Returns:
+        JWTPayload: 解码后的 payload
+
+    Raises:
+        JWTError: Token 无效或过期
     """
     # 移除可能的 "Bearer " 前缀
     if token.startswith("Bearer "):
         token = token[7:]
 
-    return decode_jwt_token(token)
+    return await decode_jwt_token(token)
 
 
 # =============================================================================
-# 用户同步逻辑
+# 用户同步逻辑 - 完全基于 Casdoor
 # =============================================================================
-async def get_or_create_user_from_jwt(payload: JWTPayload) -> User:
+async def sync_user_from_casdoor(payload: JWTPayload) -> User:
     """
-    根据 JWT payload 查找或创建本地用户
+    从 Casdoor 同步用户信息（每次登录都更新）
 
     Args:
         payload: 解码后的 JWT payload
 
     Returns:
-        User: 本地用户实例
+        User: 本地用户实例（信息完全同步自 Casdoor）
+
+    说明：
+        - 用户信息完全由 Casdoor 管理
+        - 本地数据库仅存储映射关系和缓存
+        - 每次登录都从 Casdoor 同步最新信息
     """
-    # 根据 casdoor_id 查找
+    # 根据 casdoor_id 查找本地用户记录
     user = await User.find_one(User.casdoor_id == payload.sub)
 
     if user:
-        # 更新最后登录时间
+        # 🔥 更新用户信息（从 Casdoor JWT 获取最新数据）
+        user.email = payload.email or f"{payload.sub}@casdoor"
+        user.display_name = payload.name
+        user.avatar = payload.avatar
         user.update_last_login()
         await user.save()
     else:
-        # 用户不存在，创建新用户
+        # 首次登录，创建本地用户记录
         user = User(
             casdoor_id=payload.sub,
             email=payload.email or f"{payload.sub}@casdoor",
             display_name=payload.name,
             avatar=payload.avatar,
-            is_superuser=False,
+            is_superuser=False,  # 超级管理员由 Casdoor 管理
             last_login_at=datetime.utcnow(),
         )
         await user.insert()
 
-    # ===== 同步 Casdoor 权限组 =====
+    # ===== 同步 Casdoor 权限组到本地角色 =====
     try:
         from app.services.casdoor_sync_service import CasdoorSyncService
         from app.services.permission_service import PermissionService
@@ -110,21 +261,30 @@ async def get_or_create_user_from_jwt(payload: JWTPayload) -> User:
         sync_service = CasdoorSyncService()
         perm_service = PermissionService()
 
-        # 同步 Casdoor 权限组到本地角色
-        await sync_service.sync_groups_to_local_roles(
+        # 从 Casdoor 获取用户的权限组并同步到本地
+        sync_result = await sync_service.sync_groups_to_local_roles(
             user_id=user.id,
             casdoor_user_id=payload.sub,
             app_identifier=None,  # 全局权限
+            email=payload.email,  # 传入邮箱用于 UUID 查询
         )
 
         # 清除用户权限缓存，确保使用最新权限
         await perm_service.invalidate_user_cache(user.id)
 
+        print(f"✅ User synced from Casdoor: {payload.name} | Roles: {sync_result.get('groups', [])}")
+
     except Exception as e:
         # 权限同步失败不应阻止用户登录
-        print(f"Error syncing Casdoor permissions: {e}")
+        print(f"⚠️  Error syncing Casdoor permissions: {e}")
 
     return user
+
+
+# 兼容旧代码的别名
+async def get_or_create_user_from_jwt(payload: JWTPayload) -> User:
+    """兼容函数 - 实际调用 sync_user_from_casdoor"""
+    return await sync_user_from_casdoor(payload)
 
 
 # =============================================================================
@@ -156,8 +316,8 @@ async def get_current_user(
         HTTPException 401: Token 无效或用户未找到
     """
     try:
-        # 解析并验证 JWT
-        payload = validate_token(authorization)
+        # ✅ 异步解析并验证 JWT
+        payload = await validate_token(authorization)
 
         # 查找或创建本地用户
         user = await get_or_create_user_from_jwt(payload)
@@ -183,7 +343,7 @@ async def get_current_user_optional(
         return None
 
     try:
-        payload = validate_token(authorization)
+        payload = await validate_token(authorization)
         return await get_or_create_user_from_jwt(payload)
     except (JWTError, Exception):
         return None
